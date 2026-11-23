@@ -434,7 +434,7 @@ Registry: self-hosted GitHub ($REPOSITORY)
     }
 
     private fun safeRelativePath(raw: String): String? {
-        val normalized = raw.removePrefix("./").replace('\\\\', '/')
+        val normalized = raw.removePrefix("./").replace('\\', '/')
         val segments = normalized.split('/')
         if (normalized.startsWith("/") || normalized.contains(':') ||
             segments.any { it.isBlank() || it == "." || it == ".." }) return null
