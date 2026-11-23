@@ -263,14 +263,25 @@ Packages are downloaded from Open VSX. An internet connection is required.
             val languageFolder = File(grammarDir, id)
             languageFolder.deleteRecursively()
             languageFolder.mkdirs()
-            val grammarName = File(grammarRel).name
-            File(languageFolder, grammarName).writeBytes(grammarBytes)
-            val grammarPath = "ulm/grammars/$id/$grammarName"
+
+            // Keep the package's relative syntax paths intact so embedded grammars
+            // and grammar includes can resolve sibling files.
+            files.forEach { (zipPath, bytes) ->
+                if (zipPath.startsWith("extension/syntaxes/")) {
+                    val relative = zipPath.removePrefix("extension/")
+                    val destination = File(languageFolder, relative)
+                    destination.parentFile?.mkdirs()
+                    destination.writeBytes(bytes)
+                }
+            }
+
+            val grammarPath = "ulm/grammars/$id/$grammarRel"
             var configPath: String? = null
             if (configBytes != null && languageConfigRel != null) {
-                val configName = File(languageConfigRel).name
-                File(languageFolder, configName).writeBytes(configBytes)
-                configPath = "ulm/grammars/$id/$configName"
+                val configDestination = File(languageFolder, languageConfigRel)
+                configDestination.parentFile?.mkdirs()
+                configDestination.writeBytes(configBytes)
+                configPath = "ulm/grammars/$id/$languageConfigRel"
             }
             val entry = InstalledLanguage(
                 id = id,
