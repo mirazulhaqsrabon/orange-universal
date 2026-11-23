@@ -252,9 +252,11 @@ Packages are downloaded from Open VSX. An internet connection is required.
 
         selectedGrammars.forEachIndexed { index, grammarDef ->
             val scope = grammarDef.string("scopeName")
+            if (!scope.matches(Regex("[A-Za-z0-9_.+-]+"))) return@forEachIndexed
             val languageId = grammarDef.stringOrNull("language")
                 ?: scope.substringAfterLast('.').ifBlank { packageName.lowercase(Locale.ROOT) }
             val id = languageId.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9._+-]"), "-")
+            if (id.isBlank()) return@forEachIndexed
             val grammarRel = safeRelativePath(grammarDef.string("path")) ?: return@forEachIndexed
             val grammarBytes = files["extension/$grammarRel"] ?: return@forEachIndexed
             val languageConfigRel = languages.firstOrNull { it.asJsonObject.stringOrNull("id") == languageId }
@@ -268,8 +270,12 @@ Packages are downloaded from Open VSX. An internet connection is required.
             // and grammar includes can resolve sibling files.
             files.forEach { (zipPath, bytes) ->
                 if (zipPath.startsWith("extension/syntaxes/")) {
-                    val relative = zipPath.removePrefix("extension/")
-                    val destination = File(languageFolder, relative)
+                    val relative = safeRelativePath(zipPath.removePrefix("extension/"))
+                        ?: return@forEach
+                    val destination = File(languageFolder, relative).canonicalFile
+                    if (!destination.path.startsWith(languageFolder.canonicalPath + File.separator)) {
+                        return@forEach
+                    }
                     destination.parentFile?.mkdirs()
                     destination.writeBytes(bytes)
                 }
@@ -504,7 +510,12 @@ Registry: ${if (metadataFile.isFile) "available" else "empty"}
 
     private fun safeRelativePath(raw: String): String? {
         val normalized = raw.removePrefix("./").replace('\\', '/')
-        if (normalized.startsWith("/") || normalized.split('/').any { it == ".." } || normalized.contains(':')) return null
+        val segments = normalized.split('/')
+        if (
+            normalized.startsWith("/") ||
+            normalized.contains(':') ||
+            segments.any { it.isBlank() || it == "." || it == ".." }
+        ) return null
         return normalized.takeIf { it.isNotBlank() }
     }
 
