@@ -105,27 +105,27 @@ internal class UlmRuntime(
     private fun installCli() {
         val script = """#!/bin/sh
 set -eu
-BASE="${HOME:-/home}/.local/share/ulm/bridge"
-REQ="$BASE/requests"
-RES="$BASE/responses"
-mkdir -p "$REQ" "$RES"
-ID="$$_$(date +%s)"
-OUT="$RES/$ID"
-TMP="$REQ/.$ID.tmp"
-printf '%s\n' "$@" > "$TMP"
-mv "$TMP" "$REQ/$ID"
+BASE="${'$'}{HOME:-/home}/.local/share/ulm/bridge"
+REQ="${'$'}BASE/requests"
+RES="${'$'}BASE/responses"
+mkdir -p "${'$'}REQ" "${'$'}RES"
+ID="${'$'}${'$'}_${'$'}(date +%s)"
+OUT="${'$'}RES/${'$'}ID"
+TMP="${'$'}REQ/.${'$'}ID.tmp"
+printf "%s\\n" "${'$'}@" > "${'$'}TMP"
+mv "${'$'}TMP" "${'$'}REQ/${'$'}ID"
 COUNT=0
-while [ ! -f "$OUT" ]; do
-  COUNT=$((COUNT + 1))
-  if [ "$COUNT" -ge 3600 ]; then
-    rm -f "$REQ/$ID"
+while [ ! -f "${'$'}OUT" ]; do
+  COUNT=${'$'}((COUNT + 1))
+  if [ "${'$'}COUNT" -ge 3600 ]; then
+    rm -f "${'$'}REQ/${'$'}ID"
     echo "ulm: extension did not respond. Make sure Universal Language Manager is enabled in Xed."
     exit 1
   fi
   sleep 0.1
 done
-cat "$OUT"
-rm -f "$OUT"
+cat "${'$'}OUT"
+rm -f "${'$'}OUT"
 """
         cliFile.parentFile?.mkdirs()
         cliFile.writeText(script)
