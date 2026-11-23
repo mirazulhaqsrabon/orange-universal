@@ -99,7 +99,7 @@ mkdir -p "@@DOLLAR@@REQ" "@@DOLLAR@@RES"
 ID="@@DOLLAR@@@@DOLLAR@@-@@DOLLAR@@(date +%s%N)"
 OUT="@@DOLLAR@@RES/@@DOLLAR@@ID"
 TMP="@@DOLLAR@@REQ/.@@DOLLAR@@ID.tmp"
-printf '%s\\n' "@@DOLLAR@@@" > "@@DOLLAR@@TMP"
+printf '%s\n' "@@DOLLAR@@@" > "@@DOLLAR@@TMP"
 mv "@@DOLLAR@@TMP" "@@DOLLAR@@REQ/@@DOLLAR@@ID"
 COUNT=0
 while [ ! -f "@@DOLLAR@@OUT" ]; do
