@@ -112,7 +112,7 @@ mkdir -p "${'$'}REQ" "${'$'}RES"
 ID="${'$'}${'$'}_${'$'}(date +%s)"
 OUT="${'$'}RES/${'$'}ID"
 TMP="${'$'}REQ/.${'$'}ID.tmp"
-printf "%s\\n" "${'$'}@" > "${'$'}TMP"
+printf "%s\n" "${'$'}@" > "${'$'}TMP"
 mv "${'$'}TMP" "${'$'}REQ/${'$'}ID"
 COUNT=0
 while [ ! -f "${'$'}OUT" ]; do
