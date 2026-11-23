@@ -1,0 +1,15 @@
+{
+  "$schema": "https:\/\/raw.githubusercontent.com\/Xed-Editor\/Xed-Schemas\/main\/extension.json",
+  "id": "io.github.orange.universal",
+  "mainClass": "io.github.orange.universal.Main",
+  "name": "Orange Universal",
+  "type": "extension",
+  "version": "1.0.0",
+  "description": "A demo extension of universal languages syntax support ",
+  "author": {
+    "displayName": "miraz",
+    "github": "mirazulhaqsrabon"
+  },
+  "minAppVersion": 95,
+  "repository": "https:\/\/github.com\/mirazulhaqsrabon\/orange-universal"
+}
