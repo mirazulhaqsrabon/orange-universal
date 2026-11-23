@@ -92,28 +92,28 @@ internal class UlmRuntime(
     private fun installCli() {
         val script = """#!/bin/sh
 set -eu
-BASE="${HOME:-/home}/.local/share/ulm/bridge"
-REQ="$BASE/requests"
-RES="$BASE/responses"
-mkdir -p "$REQ" "$RES"
-ID="$$-$(date +%s%N)"
-OUT="$RES/$ID"
-TMP="$REQ/.$ID.tmp"
-printf '%s\n' "$$" > "$TMP"
-mv "$TMP" "$REQ/$ID"
+BASE="@@DOLLAR@@{HOME:-/home}/.local/share/ulm/bridge"
+REQ="@@DOLLAR@@BASE/requests"
+RES="@@DOLLAR@@BASE/responses"
+mkdir -p "@@DOLLAR@@REQ" "@@DOLLAR@@RES"
+ID="@@DOLLAR@@@@DOLLAR@@-@@DOLLAR@@(date +%s%N)"
+OUT="@@DOLLAR@@RES/@@DOLLAR@@ID"
+TMP="@@DOLLAR@@REQ/.@@DOLLAR@@ID.tmp"
+printf '%s\\n' "@@DOLLAR@@@" > "@@DOLLAR@@TMP"
+mv "@@DOLLAR@@TMP" "@@DOLLAR@@REQ/@@DOLLAR@@ID"
 COUNT=0
-while [ ! -f "$OUT" ]; do
-  COUNT=$$((COUNT + 1))
-  if [ "$COUNT" -ge 3600 ]; then
-    rm -f "$REQ/$ID"
+while [ ! -f "@@DOLLAR@@OUT" ]; do
+  COUNT=@@DOLLAR@@((COUNT + 1))
+  if [ "@@DOLLAR@@COUNT" -ge 3600 ]; then
+    rm -f "@@DOLLAR@@REQ/@@DOLLAR@@ID"
     echo "ulm: extension did not respond. Make sure ULM is enabled in Xed."
     exit 1
   fi
   sleep 0.1
 done
-cat "$OUT"
-rm -f "$OUT"
-""".replace("$", "$")
+cat "@@DOLLAR@@OUT"
+rm -f "@@DOLLAR@@OUT"
+""".replace("@@DOLLAR@@", "$")
         cliFile.parentFile?.mkdirs()
         cliFile.writeText(script)
         cliFile.setExecutable(true, false)
