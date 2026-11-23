@@ -1,6 +1,5 @@
 package io.github.orange.universal
 
-import android.content.res.Resources
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -461,7 +460,7 @@ Registry: ${if (metadataFile.isFile) "available" else "empty"}
         GrammarRegistry.getInstance().loadGrammars("ulm/registry/${entry.id}.json")
         registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
         if (entry.extensions.isNotEmpty()) {
-            val type = DynamicFileType(entry, extensionContext.resources)
+            val type = DynamicFileType(entry)
             FileTypeManager.register(type)
             registeredTypes[entry.id] = type
         }
@@ -540,12 +539,11 @@ Registry: ${if (metadataFile.isFile) "available" else "empty"}
     }
 
     private class DynamicFileType(
-        private val entry: InstalledLanguage,
-        resources: Resources
+        private val entry: InstalledLanguage
     ) : FileType {
         override val extensions: List<String> = entry.extensions
         override val textmateScope: String = entry.scope
-        override val icon: Icon = Icon.ExternalResourceIcon(android.R.drawable.ic_menu_manage, resources)
+        override val icon: Icon = Icon.TextIcon("L")
         override val name: String = entry.id
         override val title: String = entry.title
     }
