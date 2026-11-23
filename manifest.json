@@ -1,15 +1,17 @@
 {
-  "$schema": "https:\/\/raw.githubusercontent.com\/Xed-Editor\/Xed-Schemas\/main\/extension.json",
+  "$schema": "https://raw.githubusercontent.com/Xed-Editor/Xed-Schemas/main/extension.json",
   "id": "io.github.orange.universal",
   "mainClass": "io.github.orange.universal.Main",
-  "name": "Orange Universal",
+  "name": "Universal Language Manager",
   "type": "extension",
   "version": "1.0.0",
-  "description": "A demo extension of universal languages syntax support ",
+  "description": "Install and manage TextMate language grammars dynamically from the Xed Ubuntu terminal.",
   "author": {
     "displayName": "miraz",
     "github": "mirazulhaqsrabon"
   },
   "minAppVersion": 95,
-  "repository": "https:\/\/github.com\/mirazulhaqsrabon\/orange-universal"
+  "repository": "https://github.com/mirazulhaqsrabon/orange-universal",
+  "license": "MIT",
+  "tags": ["language", "syntax-highlighting", "textmate", "terminal"]
 }
