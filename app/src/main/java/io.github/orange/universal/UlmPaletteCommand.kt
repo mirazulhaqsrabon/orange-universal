@@ -8,7 +8,7 @@ import com.rk.icons.Icon
 internal class UlmPaletteCommand : GlobalCommand() {
     override val id: String = "io.github.orange.universal.open"
     override fun getLabel(): String = "Universal Language Manager"
-    override fun getIcon(): Icon = Icon.ExternalResourceIcon(android.R.drawable.ic_menu_manage)
+    override fun getIcon(): Icon = Icon.TextIcon("ULM")
 
     override fun execute(context: ActionContext) {
         AlertDialog.Builder(context.currentActivity)
