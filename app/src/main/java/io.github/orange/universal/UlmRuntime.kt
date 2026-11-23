@@ -303,6 +303,7 @@ Packs are hosted in the ULM registry on GitHub. No Open VSX connection is used.
             File(data, "registry/${entry.id}.json").delete()
         }
         writeInstalled(entries - matches.toSet())
+        writeGrammarRegistry()
         return "Removed: ${matches.joinToString { it.id }}\\nRestart Xed to clear already-loaded TextMate grammar data.\\n"
     }
 
@@ -313,7 +314,10 @@ Packs are hosted in the ULM registry on GitHub. No Open VSX connection is used.
         val updated = entries[index].copy(enabled = enabled)
         entries[index] = updated
         writeInstalled(entries)
-        if (enabled) registerLanguage(updated) else registeredTypes.remove(updated.id)?.let { FileTypeManager.unregister(it) }
+        if (enabled) registerLanguage(updated) else {
+            registeredTypes.remove(updated.id)?.let { FileTypeManager.unregister(it) }
+            writeGrammarRegistry()
+        }
         return "${updated.title} ${if (enabled) "enabled" else "disabled"}.\\n"
     }
 
@@ -364,20 +368,9 @@ Registry: self-hosted GitHub ($REPOSITORY)
     }
 
     private fun registerLanguage(entry: InstalledLanguage) {
-        val definitionFile = File(data, "registry/${entry.id}.json")
-        definitionFile.parentFile?.mkdirs()
-        val definition = JsonObject().apply {
-            add("languages", JsonArray().apply {
-                add(grammarDefinition(entry.grammar, entry.id, entry.scope, entry.configuration))
-                if (entry.injectionGrammar != null && entry.injectionScope != null) {
-                    add(grammarDefinition(entry.injectionGrammar, "${entry.id}-mdx-injection", entry.injectionScope, null))
-                }
-            })
-        }
-        definitionFile.writeText(gson.toJson(definition))
-        GrammarRegistry.getInstance().loadGrammars("ulm/registry/${entry.id}.json")
+        writeGrammarRegistry()
         registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
-        val type = DynamicFileType(entry)
+        val type = UlmFileType(entry)
         FileTypeManager.register(type)
         registeredTypes[entry.id] = type
     }
@@ -389,6 +382,26 @@ Registry: self-hosted GitHub ($REPOSITORY)
             addProperty("scopeName", scope)
             configuration?.let { addProperty("languageConfiguration", it) }
         }
+
+    private fun writeGrammarRegistry() {
+        val definition = JsonObject().apply {
+            add("languages", JsonArray().apply {
+                readInstalled().filter { it.enabled }.forEach { entry ->
+                    add(grammarDefinition(entry.grammar, entry.id, entry.scope, entry.configuration))
+                    if (entry.injectionGrammar != null && entry.injectionScope != null) {
+                        add(grammarDefinition(entry.injectionGrammar, "${entry.id}-injection", entry.injectionScope, null))
+                    }
+                }
+            })
+        }
+        val registryFile = File(data, "registry/languages.json")
+        registryFile.parentFile?.mkdirs()
+        val temporary = File(registryFile.parentFile, "languages.json.tmp")
+        temporary.writeText(gson.toJson(definition))
+        if (registryFile.exists()) registryFile.delete()
+        if (!temporary.renameTo(registryFile)) throw IllegalStateException("Could not write languages.json")
+        GrammarRegistry.getInstance().loadGrammars("ulm/registry/languages.json")
+    }
 
     private fun readInstalled(): List<InstalledLanguage> {
         if (!metadataFile.isFile) return emptyList()
@@ -459,14 +472,6 @@ Registry: self-hosted GitHub ($REPOSITORY)
             out.write(buffer, 0, count)
         }
         return out.toByteArray()
-    }
-
-    private class DynamicFileType(private val entry: InstalledLanguage) : FileType {
-        override val extensions: List<String> = entry.extensions
-        override val textmateScope: String = entry.scope
-        override val icon: Icon = Icon.TextIcon("A")
-        override val name: String = entry.id
-        override val title: String = entry.title
     }
 
     companion object {
