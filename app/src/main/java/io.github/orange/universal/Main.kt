@@ -20,6 +20,6 @@ class Main(context: ExtensionContext) : ExtensionAPI(context) {
 
     override fun onDispose() {
         if (::runtime.isInitialized) runtime.stop()
-        disposables.dispose()
+        disposables.onDispose()
     }
 }
