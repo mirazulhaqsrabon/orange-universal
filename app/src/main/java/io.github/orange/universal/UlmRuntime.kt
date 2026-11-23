@@ -5,14 +5,12 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
+import com.rk.file.FileType
 import com.rk.file.FileTypeManager
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.provider.FileResolver
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
 
 internal data class InstalledLanguage(
@@ -22,12 +20,8 @@ internal data class InstalledLanguage(
     val extensions: List<String>,
     val grammar: String,
     val configuration: String?,
-    val namespace: String,
-    val packageName: String,
     val version: String,
-    val enabled: Boolean = true,
-    val injectionGrammar: String? = null,
-    val injectionScope: String? = null
+    val enabled: Boolean = true
 )
 
 internal class UlmRuntime(
@@ -98,42 +92,43 @@ internal class UlmRuntime(
     private fun installCli() {
         val script = """#!/bin/sh
 set -eu
-BASE="${'$'}{HOME:-/home}/.local/share/ulm/bridge"
-REQ="${'$'}BASE/requests"
-RES="${'$'}BASE/responses"
-mkdir -p "${'$'}REQ" "${'$'}RES"
-ID="${'$'}${'$'}_${'$'}(date +%s)"
-OUT="${'$'}RES/${'$'}ID"
-TMP="${'$'}REQ/.${'$'}ID.tmp"
-printf "%s\\n" "${'$'}@" > "${'$'}TMP"
-mv "${'$'}TMP" "${'$'}REQ/${'$'}ID"
+BASE="${HOME:-/home}/.local/share/ulm/bridge"
+REQ="$BASE/requests"
+RES="$BASE/responses"
+mkdir -p "$REQ" "$RES"
+ID="$$-$(date +%s%N)"
+OUT="$RES/$ID"
+TMP="$REQ/.$ID.tmp"
+printf '%s\n' "$$" > "$TMP"
+mv "$TMP" "$REQ/$ID"
 COUNT=0
-while [ ! -f "${'$'}OUT" ]; do
-  COUNT=${'$'}((COUNT + 1))
-  if [ "${'$'}COUNT" -ge 3600 ]; then
-    rm -f "${'$'}REQ/${'$'}ID"
+while [ ! -f "$OUT" ]; do
+  COUNT=$$((COUNT + 1))
+  if [ "$COUNT" -ge 3600 ]; then
+    rm -f "$REQ/$ID"
     echo "ulm: extension did not respond. Make sure ULM is enabled in Xed."
     exit 1
   fi
   sleep 0.1
 done
-cat "${'$'}OUT"
-rm -f "${'$'}OUT"
-"""
+cat "$OUT"
+rm -f "$OUT"
+""".replace("$", "$")
         cliFile.parentFile?.mkdirs()
         cliFile.writeText(script)
         cliFile.setExecutable(true, false)
     }
 
     private fun processRequest(request: File) {
-        val response = File(responseDir, request.name)
+        val response = File(responseDir, ".${request.name}.tmp")
         try {
             val args = request.readLines().filter { it.isNotEmpty() }
-            val temporary = File(responseDir, ".${request.name}.tmp")
-            temporary.writeText(handle(args))
-            if (!temporary.renameTo(response)) throw IllegalStateException("Could not publish command response")
+            response.writeText(handle(args))
+            val published = File(responseDir, request.name)
+            if (published.exists()) published.delete()
+            if (!response.renameTo(published)) throw IllegalStateException("Could not publish command response")
         } catch (e: Exception) {
-            response.writeText("ulm: error: ${e.message ?: e.javaClass.simpleName}\\n")
+            File(responseDir, request.name).writeText("ulm: error: ${e.message ?: e.javaClass.simpleName}\n")
         } finally {
             request.delete()
         }
@@ -144,260 +139,261 @@ rm -f "${'$'}OUT"
         return when (args[0].lowercase(Locale.ROOT)) {
             "help", "--help", "-h" -> help()
             "search" -> search(args.drop(1).joinToString(" "))
-            "install", "add" -> if (args.size != 2) "Usage: ulm install <language-id>\\n" else install(args[1])
-            "remove", "uninstall" -> if (args.size != 2) "Usage: ulm remove <language-id>\\n" else remove(args[1])
+            "install", "add" -> if (args.size != 2) "Usage: ulm install <language-id>\n" else install(args[1])
+            "remove", "uninstall" -> if (args.size != 2) "Usage: ulm remove <language-id>\n" else remove(args[1])
             "list", "ls" -> listLanguages()
-            "info" -> if (args.size != 2) "Usage: ulm info <language-id>\\n" else info(args[1])
+            "info" -> if (args.size != 2) "Usage: ulm info <language-id>\n" else info(args[1])
             "update" -> update(args.getOrNull(1))
-            "enable" -> if (args.size != 2) "Usage: ulm enable <language-id>\\n" else setEnabled(args[1], true)
-            "disable" -> if (args.size != 2) "Usage: ulm disable <language-id>\\n" else setEnabled(args[1], false)
+            "enable" -> if (args.size != 2) "Usage: ulm enable <language-id>\n" else setEnabled(args[1], true)
+            "disable" -> if (args.size != 2) "Usage: ulm disable <language-id>\n" else setEnabled(args[1], false)
             "status" -> status()
-            "version", "--version", "-v" -> "Universal Language Manager 1.0.0\\n"
-            else -> "Unknown command: ${args[0]}\\nRun 'ulm help' for usage.\\n"
+            "version", "--version", "-v" -> "Universal Language Manager 1.0.0\n"
+            else -> "Unknown command: ${args[0]}\nRun 'ulm help' for usage.\n"
         }
     }
 
     private fun help() = """Universal Language Manager (ULM) 1.0.0
 
 Usage:
-  ulm help                    Show this help
-  ulm search <query>          Search your language registry
-  ulm install <language-id>   Install a language pack
+  ulm help                    Show command help
+  ulm search <query>          Search bundled languages
+  ulm install <language-id>   Install a bundled language
   ulm remove <language-id>    Remove an installed language
   ulm list                    List installed languages
   ulm info <language-id>      Show language details
-  ulm update [language-id]    Update one or all installed packs
+  ulm update [language-id]    Reinstall from bundled assets
   ulm enable <language-id>    Enable a language file type
   ulm disable <language-id>   Disable a language file type
-  ulm status                  Show ULM status
+  ulm status                  Show manager status
   ulm version                 Show version
 
-Available pack:
-  astro — Astro syntax highlighting for .astro files
-
-Examples:
+Example:
   ulm search astro
   ulm install astro
   ulm list
-  ulm update astro
   ulm remove astro
 
-Packs are hosted in the ULM registry on GitHub. No Open VSX connection is used.
+Language grammars and metadata are bundled inside this extension.
 """
 
-    private fun fetchRegistry(): JsonObject =
-        getJson("$REGISTRY_BASE/registry.json")
+    private fun catalog(): List<JsonObject> {
+        val root = extensionContext.assets.open("languages.json").bufferedReader().use {
+            JsonParser.parseReader(it).asJsonObject
+        }
+        return root.getAsJsonArray("languages")?.map { it.asJsonObject } ?: emptyList()
+    }
 
     private fun search(query: String): String {
-        if (query.isBlank()) return "Usage: ulm search <query>\\n"
-        val languages = fetchRegistry().getAsJsonArray("languages") ?: JsonArray()
-        val matches = languages.filter { element ->
-            val obj = element.asJsonObject
-            obj.stringOrNull("id").orEmpty().contains(query, true) ||
-                obj.stringOrNull("name").orEmpty().contains(query, true) ||
-                obj.stringOrNull("description").orEmpty().contains(query, true)
+        if (query.isBlank()) return "Usage: ulm search <query>\n"
+        val matches = catalog().filter { item ->
+            item.stringOrNull("id").orEmpty().contains(query, true) ||
+                item.stringOrNull("name").orEmpty().contains(query, true) ||
+                item.stringOrNull("description").orEmpty().contains(query, true)
         }
-        if (matches.isEmpty()) return "No language packs found for '$query'.\\n"
+        if (matches.isEmpty()) return "No bundled language found for '$query'.\n"
         return buildString {
-            append("ULM registry results:\\n\\n")
-            matches.forEach { element ->
-                val obj = element.asJsonObject
-                append("• ${obj.stringOrNull("id")} — ${obj.stringOrNull("name")}\\n")
-                obj.stringOrNull("description")?.let { append("  $it\\n") }
-                append("  Install: ulm install ${obj.stringOrNull("id")}\\n")
+            append("Bundled languages:\n\n")
+            matches.forEach { item ->
+                val id = item.string("id")
+                val extensionList = item.getAsJsonArray("extensions").joinToString { ".${it.asString.removePrefix(".")}" }
+                append("• $id — ${item.string("name")}\n")
+                append("  Extensions: $extensionList\n")
+                append("  Install: ulm install $id\n")
             }
         }
     }
 
     private fun install(idInput: String): String {
         val id = idInput.lowercase(Locale.ROOT)
-        if (!id.matches(Regex("[a-z0-9][a-z0-9._+-]*"))) return "Invalid language id.\\n"
-        val registry = fetchRegistry()
-        val item = registry.getAsJsonArray("languages")?.firstOrNull {
-            it.asJsonObject.stringOrNull("id").equals(id, true)
-        }?.asJsonObject ?: return "Language '$id' is not in the ULM registry. Try: ulm search astro\\n"
-        val metadataPath = safeRelativePath(item.string("metadata"))
-            ?: throw IllegalArgumentException("Registry contains an unsafe metadata path")
-        val metadata = getJson("$REGISTRY_BASE/$metadataPath")
-        if (metadata.string("id") != id) throw IllegalArgumentException("Language metadata id does not match registry")
+        if (!id.matches(Regex("[a-z0-9][a-z0-9._+-]*"))) return "Invalid language id.\n"
+        val metadata = catalog().firstOrNull { it.stringOrNull("id").equals(id, true) }
+            ?: return "Language '$id' is not bundled. Try: ulm search astro\n"
+
         val scope = metadata.string("scopeName")
         if (!scope.matches(Regex("[A-Za-z0-9_.+-]+"))) throw IllegalArgumentException("Invalid TextMate scope")
         val extensions = metadata.getAsJsonArray("extensions")?.mapNotNull { element ->
             element.asString.removePrefix(".").takeIf { it.matches(Regex("[A-Za-z0-9_+-]+")) }
         }.orEmpty()
-        if (extensions.isEmpty()) throw IllegalArgumentException("Language pack has no valid file extensions")
+        if (extensions.isEmpty()) throw IllegalArgumentException("Language has no valid file extensions")
 
-        val folder = File(grammarDir, id)
-        folder.deleteRecursively()
-        folder.mkdirs()
-        val grammarRel = safeRelativePath(metadata.string("grammar"))
-            ?: throw IllegalArgumentException("Invalid grammar path")
-        val grammarBytes = getBytes("$REGISTRY_BASE/languages/$id/$grammarRel", MAX_GRAMMAR_BYTES)
-        val grammarJson = JsonParser.parseString(String(grammarBytes, Charsets.UTF_8)).asJsonObject
-        if (grammarJson.stringOrNull("scopeName") != scope) {
-            throw IllegalArgumentException("Grammar scope does not match metadata")
+        val grammarName = safeAssetName(metadata.string("grammar"))
+            ?: throw IllegalArgumentException("Grammar must be a root-level asset filename")
+        val configName = metadata.stringOrNull("languageConfiguration")?.let {
+            safeAssetName(it) ?: throw IllegalArgumentException("Language configuration must be a root-level asset filename")
         }
-        val grammarDestination = File(folder, grammarRel)
-        grammarDestination.parentFile?.mkdirs()
-        grammarDestination.writeBytes(grammarBytes)
+        val staging = File(grammarDir, ".$id-staging")
+        staging.deleteRecursively()
+        if (!staging.mkdirs()) throw IllegalStateException("Could not create language staging directory")
 
-        val configurationRel = metadata.stringOrNull("configuration")?.let(::safeRelativePath)
-        var configurationPath: String? = null
-        if (configurationRel != null) {
-            val bytes = getBytes("$REGISTRY_BASE/languages/$id/$configurationRel", MAX_CONFIG_BYTES)
-            val destination = File(folder, configurationRel)
-            destination.parentFile?.mkdirs()
-            destination.writeBytes(bytes)
-            configurationPath = "ulm/grammars/$id/$configurationRel"
-        }
-
-        var injectionPath: String? = null
-        var injectionScope: String? = null
-        metadata.getAsJsonArray("injections")?.firstOrNull()?.asJsonObject?.let { injection ->
-            val rel = safeRelativePath(injection.string("grammar"))
-                ?: throw IllegalArgumentException("Invalid injection grammar path")
-            val bytes = getBytes("$REGISTRY_BASE/languages/$id/$rel", MAX_GRAMMAR_BYTES)
-            val injectionJson = JsonParser.parseString(String(bytes, Charsets.UTF_8)).asJsonObject
-            val expectedScope = injection.string("scopeName")
-            if (injectionJson.stringOrNull("scopeName") != expectedScope) {
-                throw IllegalArgumentException("Injection grammar scope does not match metadata")
+        try {
+            copyAsset(grammarName, File(staging, grammarName))
+            val grammarJson = JsonParser.parseString(File(staging, grammarName).readText()).asJsonObject
+            if (grammarJson.stringOrNull("scopeName") != scope) {
+                throw IllegalArgumentException("Grammar scope does not match languages.json")
             }
-            val destination = File(folder, rel)
-            destination.parentFile?.mkdirs()
-            destination.writeBytes(bytes)
-            injectionPath = "ulm/grammars/$id/$rel"
-            injectionScope = expectedScope
-        }
 
-        val entry = InstalledLanguage(
-            id = id,
-            title = metadata.string("name"),
-            scope = scope,
-            extensions = extensions,
-            grammar = "ulm/grammars/$id/$grammarRel",
-            configuration = configurationPath,
-            namespace = OWNER,
-            packageName = REPOSITORY,
-            version = metadata.string("version"),
-            enabled = true,
-            injectionGrammar = injectionPath,
-            injectionScope = injectionScope
-        )
-        val entries = readInstalled().toMutableList()
-        entries.removeAll { it.id == id }
-        entries.add(entry)
-        writeInstalled(entries)
-        registerLanguage(entry)
-        return "Installed ${entry.title} ${entry.version}\\n  Scope: ${entry.scope}\\n  Files: ${entry.extensions.joinToString { ".$it" }}\\n  Source: $REPOSITORY\\n"
+            var configurationPath: String? = null
+            if (configName != null) {
+                copyAsset(configName, File(staging, configName))
+                JsonParser.parseString(File(staging, configName).readText())
+                configurationPath = "ulm/grammars/$id/$configName"
+            }
+
+            val destination = File(grammarDir, id)
+            destination.deleteRecursively()
+            if (!staging.renameTo(destination)) throw IllegalStateException("Could not install language assets")
+
+            val entry = InstalledLanguage(
+                id = id,
+                title = metadata.string("name"),
+                scope = scope,
+                extensions = extensions,
+                grammar = "ulm/grammars/$id/$grammarName",
+                configuration = configurationPath,
+                version = metadata.stringOrNull("version") ?: "1.0.0",
+                enabled = true
+            )
+            val entries = readInstalled().toMutableList()
+            entries.removeAll { it.id == id }
+            entries.add(entry)
+            writeInstalled(entries)
+            registerLanguage(entry)
+            return "Installed ${entry.title} ${entry.version}\n  Scope: ${entry.scope}\n  Files: ${entry.extensions.joinToString { ".$it" }}\n"
+        } catch (e: Exception) {
+            staging.deleteRecursively()
+            throw e
+        }
     }
 
     private fun remove(id: String): String {
         val entries = readInstalled()
-        val matches = entries.filter { it.id.equals(id, true) }
-        if (matches.isEmpty()) return "Language '$id' is not installed.\\n"
-        matches.forEach { entry ->
-            registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
-            File(grammarDir, entry.id).deleteRecursively()
-            File(data, "registry/${entry.id}.json").delete()
-        }
-        writeInstalled(entries - matches.toSet())
-        writeGrammarRegistry()
-        return "Removed: ${matches.joinToString { it.id }}\\nRestart Xed to clear already-loaded TextMate grammar data.\\n"
+        val entry = entries.firstOrNull { it.id.equals(id, true) }
+            ?: return "Language '$id' is not installed.\n"
+        registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
+        File(grammarDir, entry.id).deleteRecursively()
+        val remaining = entries.filterNot { it.id == entry.id }
+        writeInstalled(remaining)
+        writeGrammarRegistry(remaining)
+        return "Removed ${entry.title}.\n"
     }
 
     private fun setEnabled(id: String, enabled: Boolean): String {
         val entries = readInstalled().toMutableList()
         val index = entries.indexOfFirst { it.id.equals(id, true) }
-        if (index < 0) return "Language '$id' is not installed.\\n"
+        if (index < 0) return "Language '$id' is not installed.\n"
         val updated = entries[index].copy(enabled = enabled)
         entries[index] = updated
         writeInstalled(entries)
         if (enabled) registerLanguage(updated) else {
             registeredTypes.remove(updated.id)?.let { FileTypeManager.unregister(it) }
-            writeGrammarRegistry()
+            writeGrammarRegistry(entries)
         }
-        return "${updated.title} ${if (enabled) "enabled" else "disabled"}.\\n"
+        return "${updated.title} ${if (enabled) "enabled" else "disabled"}.\n"
     }
 
     private fun update(id: String?): String {
         val entries = readInstalled()
         val targets = if (id == null) entries else entries.filter { it.id.equals(id, true) }
-        if (targets.isEmpty()) return if (id == null) "No installed languages to update.\\n" else "Language '$id' is not installed.\\n"
+        if (targets.isEmpty()) return if (id == null) "No installed languages to update.\n" else "Language '$id' is not installed.\n"
         return targets.joinToString("") { install(it.id) }
     }
 
     private fun listLanguages(): String {
         val entries = readInstalled()
-        if (entries.isEmpty()) return "No languages installed yet. Try: ulm search astro\\n"
+        if (entries.isEmpty()) return "No languages installed yet. Try: ulm search astro\n"
         return buildString {
-            append("Installed languages (${entries.size}):\\n")
-            entries.forEach { append("  ${if (it.enabled) "[x]" else "[ ]"} ${it.id} — ${it.title} (${it.extensions.joinToString { ext -> ".$ext" }})\\n") }
+            append("Installed languages (${entries.size}):\n")
+            entries.forEach { entry ->
+                val state = if (entry.enabled) "[x]" else "[ ]"
+                val extensions = entry.extensions.joinToString { ".$it" }
+                append("  $state ${entry.id} — ${entry.title} ($extensions)\n")
+            }
         }
     }
 
     private fun info(id: String): String {
-        val entry = readInstalled().firstOrNull { it.id.equals(id, true) }
-            ?: return "Language '$id' is not installed.\\n"
-        return """${entry.title} (${entry.id})
-Scope: ${entry.scope}
-Extensions: ${entry.extensions.joinToString { ".$it" }}
-Source: $REPOSITORY
-Version: ${entry.version}
-Status: ${if (entry.enabled) "enabled" else "disabled"}
-Grammar: ${entry.grammar}
+        val item = catalog().firstOrNull { it.stringOrNull("id").equals(id, true) }
+            ?: return "Unknown language '$id'.\n"
+        val installed = readInstalled().firstOrNull { it.id.equals(id, true) }
+        val extensions = item.getAsJsonArray("extensions").joinToString { ".${it.asString.removePrefix(".")}" }
+        val state = when {
+            installed == null -> "not installed"
+            installed.enabled -> "enabled"
+            else -> "disabled"
+        }
+        return """${item.string("name")} (${item.string("id")})
+Scope: ${item.string("scopeName")}
+Extensions: $extensions
+Version: ${item.stringOrNull("version") ?: "1.0.0"}
+Status: $state
 """
     }
 
     private fun status(): String {
         val entries = readInstalled()
         return """Universal Language Manager 1.0.0
+Available languages: ${catalog().size}
 Installed languages: ${entries.size}
 Enabled languages: ${entries.count { it.enabled }}
 CLI: ${if (cliFile.canExecute()) "installed" else "missing"}
-Registry: self-hosted GitHub ($REPOSITORY)
+Registry: bundled assets (languages.json)
 """
     }
 
+    private fun copyAsset(assetName: String, destination: File) {
+        destination.parentFile?.mkdirs()
+        extensionContext.assets.open(assetName).use { input ->
+            destination.outputStream().use { output -> input.copyTo(output) }
+        }
+    }
+
+    private fun safeAssetName(value: String): String? {
+        if (value.isBlank() || value == "." || value == ".." || value.contains('/') || value.contains('\\')) return null
+        return value
+    }
+
     private fun restoreInstalledLanguages() {
-        readInstalled().filter { it.enabled }.forEach { entry ->
-            runCatching { registerLanguage(entry) }
-                .onFailure { extensionContext.logWarn("Could not restore grammar ${entry.id}: ${it.message}") }
+        val entries = readInstalled()
+        writeGrammarRegistry(entries)
+        entries.filter { it.enabled }.forEach { entry ->
+            runCatching {
+                val type = UlmFileType(entry)
+                FileTypeManager.register(type)
+                registeredTypes[entry.id] = type
+            }.onFailure {
+                extensionContext.logWarn("Could not restore language ${entry.id}: ${it.message}")
+            }
         }
     }
 
     private fun registerLanguage(entry: InstalledLanguage) {
-        writeGrammarRegistry()
+        writeGrammarRegistry(readInstalled())
         registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
         val type = UlmFileType(entry)
         FileTypeManager.register(type)
         registeredTypes[entry.id] = type
     }
 
-    private fun grammarDefinition(grammar: String, name: String, scope: String, configuration: String?): JsonObject =
+    private fun grammarDefinition(entry: InstalledLanguage): JsonObject =
         JsonObject().apply {
-            addProperty("grammar", grammar)
-            addProperty("name", name)
-            addProperty("scopeName", scope)
-            configuration?.let { addProperty("languageConfiguration", it) }
+            addProperty("grammar", entry.grammar)
+            addProperty("name", entry.id)
+            addProperty("scopeName", entry.scope)
+            entry.configuration?.let { addProperty("languageConfiguration", it) }
         }
 
-    private fun writeGrammarRegistry() {
+    private fun writeGrammarRegistry(entries: List<InstalledLanguage>) {
         val definition = JsonObject().apply {
             add("languages", JsonArray().apply {
-                readInstalled().filter { it.enabled }.forEach { entry ->
-                    add(grammarDefinition(entry.grammar, entry.id, entry.scope, entry.configuration))
-                    if (entry.injectionGrammar != null && entry.injectionScope != null) {
-                        add(grammarDefinition(entry.injectionGrammar, "${entry.id}-injection", entry.injectionScope, null))
-                    }
-                }
+                entries.filter { it.enabled }.forEach { add(grammarDefinition(it)) }
             })
         }
         val registryFile = File(data, "registry/languages.json")
         registryFile.parentFile?.mkdirs()
         val temporary = File(registryFile.parentFile, "languages.json.tmp")
         temporary.writeText(gson.toJson(definition))
-        if (registryFile.exists()) registryFile.delete()
-        if (!temporary.renameTo(registryFile)) throw IllegalStateException("Could not write languages.json")
+        if (registryFile.exists() && !registryFile.delete()) throw IllegalStateException("Could not replace grammar registry")
+        if (!temporary.renameTo(registryFile)) throw IllegalStateException("Could not publish grammar registry")
         GrammarRegistry.getInstance().loadGrammars("ulm/registry/languages.json")
     }
 
@@ -418,66 +414,14 @@ Registry: self-hosted GitHub ($REPOSITORY)
         metadataFile.parentFile?.mkdirs()
         val temporary = File(metadataFile.parentFile, "installed.json.tmp")
         temporary.writeText(gson.toJson(entries))
-        if (metadataFile.exists()) metadataFile.delete()
+        if (metadataFile.exists() && !metadataFile.delete()) throw IllegalStateException("Could not replace installed language list")
         if (!temporary.renameTo(metadataFile)) throw IllegalStateException("Could not save installed language list")
     }
 
-    private fun getJson(address: String): JsonObject =
-        JsonParser.parseString(String(getBytes(address, MAX_RESPONSE_BYTES), Charsets.UTF_8)).asJsonObject
-
-    private fun getBytes(address: String, maxBytes: Int): ByteArray {
-        val url = URL(address)
-        if (url.protocol != "https" || url.host != "raw.githubusercontent.com") {
-            throw IllegalArgumentException("Only the trusted self-hosted HTTPS registry is allowed")
-        }
-        val connection = url.openConnection() as HttpURLConnection
-        connection.connectTimeout = 15000
-        connection.readTimeout = 30000
-        connection.instanceFollowRedirects = false
-        connection.setRequestProperty("User-Agent", "UniversalLanguageManager/1.0")
-        try {
-            val code = connection.responseCode
-            if (code !in 200..299) throw IllegalStateException("HTTP $code while reading ULM registry")
-            connection.inputStream.use { return it.readBounded(maxBytes) }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun safeRelativePath(raw: String): String? {
-        val normalized = raw.removePrefix("./").replace('\\', '/')
-        val segments = normalized.split('/')
-        if (normalized.startsWith("/") || normalized.contains(':') ||
-            segments.any { it.isBlank() || it == "." || it == ".." }) return null
-        return normalized.takeIf { it.isNotBlank() }
-    }
-
     private fun JsonObject.string(key: String): String =
-        get(key)?.takeIf { !it.isJsonNull }?.asString ?: throw IllegalArgumentException("Missing '$key' in ULM metadata")
+        get(key)?.takeIf { !it.isJsonNull }?.asString
+            ?: throw IllegalArgumentException("Missing '$key' in languages.json")
 
     private fun JsonObject.stringOrNull(key: String): String? =
         get(key)?.takeIf { !it.isJsonNull }?.asString
-
-    private fun java.io.InputStream.readBounded(limit: Int): ByteArray {
-        val out = ByteArrayOutputStream()
-        val buffer = ByteArray(8192)
-        var total = 0
-        while (true) {
-            val count = read(buffer)
-            if (count < 0) break
-            total += count
-            if (total > limit) throw IllegalArgumentException("Registry file exceeds size limit")
-            out.write(buffer, 0, count)
-        }
-        return out.toByteArray()
-    }
-
-    companion object {
-        private const val OWNER = "mirazulhaqsrabon"
-        private const val REPOSITORY = "orange-universal"
-        private const val REGISTRY_BASE = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/work/ulm-runtime/ulm"
-        private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
-        private const val MAX_GRAMMAR_BYTES = 8 * 1024 * 1024
-        private const val MAX_CONFIG_BYTES = 512 * 1024
-    }
 }
