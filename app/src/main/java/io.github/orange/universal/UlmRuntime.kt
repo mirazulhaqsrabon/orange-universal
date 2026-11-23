@@ -76,7 +76,7 @@ internal class UlmRuntime(
         worker = Thread({
             while (running && !Thread.currentThread().isInterrupted) {
                 try {
-                    requestDir.listFiles()?.filter { it.isFile }?.sortedBy { it.lastModified() }?.forEach { request ->
+                    requestDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.sortedBy { it.lastModified() }?.forEach { request ->
                         if (!running) return@forEach
                         processRequest(request)
                     }
@@ -112,11 +112,13 @@ RES="$BASE/responses"
 mkdir -p "$REQ" "$RES"
 ID="$$_$(date +%s)"
 OUT="$RES/$ID"
-printf '%s\\n' "$@" > "$REQ/$ID"
+TMP="$REQ/.$ID.tmp"
+printf '%s\n' "$@" > "$TMP"
+mv "$TMP" "$REQ/$ID"
 COUNT=0
 while [ ! -f "$OUT" ]; do
   COUNT=$((COUNT + 1))
-  if [ "$COUNT" -ge 600 ]; then
+  if [ "$COUNT" -ge 3600 ]; then
     rm -f "$REQ/$ID"
     echo "ulm: extension did not respond. Make sure Universal Language Manager is enabled in Xed."
     exit 1
@@ -136,7 +138,9 @@ rm -f "$OUT"
         try {
             val args = request.readLines().filter { it.isNotEmpty() }
             val result = handle(args)
-            response.writeText(result)
+            val temporary = File(responseDir, ".${request.name}.tmp")
+            temporary.writeText(result)
+            if (!temporary.renameTo(response)) throw IllegalStateException("Could not publish command response")
         } catch (e: Exception) {
             response.writeText("ulm: error: ${e.message ?: e.javaClass.simpleName}\n")
         } finally {
