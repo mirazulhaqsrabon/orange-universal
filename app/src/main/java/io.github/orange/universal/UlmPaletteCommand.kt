@@ -16,9 +16,9 @@ internal class UlmPaletteCommand : GlobalCommand() {
             .setMessage(
                 "Open the Xed Ubuntu terminal and run:\n\n" +
                     "ulm help\n\n" +
-                    "Examples:\n" +
-                    "ulm search python\n" +
-                    "ulm install ms-python.python\n" +
+                    "Astro syntax highlighting:\n" +
+                    "ulm search astro\n" +
+                    "ulm install astro\n" +
                     "ulm list"
             )
             .setPositiveButton("OK", null)
