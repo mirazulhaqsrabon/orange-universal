@@ -7,39 +7,48 @@ on:
     branches:
       - main
       - master
+      - "work/**"
   pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: read 
+  contents: read
 
 jobs:
   build:
-    name: orange
+    name: Build and verify extension
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout source code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Setup JDK
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      # Make scripts executable
       - name: Make scripts executable
-        run: chmod +x ./gradlew && chmod +x ./compileDebug && chmod +x ./compileRelease
+        run: chmod +x ./gradlew ./compileDebug ./compileRelease
 
-      # Build (Debug)
       - name: Compile Debug
         run: ./compileDebug
-        
-      # Upload extension artifacts
-      - name: Upload ZIP
+
+      - name: Compile Release
+        run: ./compileRelease
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Validate extension package
+        run: |
+          test -n "$(find output -maxdepth 1 -type f -name '*.xed' -print -quit)"
+          unzip -l output/*.xed
+          unzip -p output/*.xed manifest.json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["id"] == "io.github.orange.universal"; assert d["mainClass"] == "io.github.orange.universal.Main"; print("Manifest OK:", d["name"], d["version"])'
+
+      - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
-          name: extension-build
-          path: output/*.zip
+          name: universal-language-manager
+          path: output/*.xed
