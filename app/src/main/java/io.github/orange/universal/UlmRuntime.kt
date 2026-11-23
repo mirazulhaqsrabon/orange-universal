@@ -214,10 +214,16 @@ Packages are downloaded from Open VSX. An internet connection is required.
             ?: return "No Open VSX extension matched '$query'. Try: ulm search $query\n"
         val namespace = selected.first
         val packageName = selected.second
+        if (!namespace.matches(Regex("[A-Za-z0-9_-]+")) ||
+            !packageName.matches(Regex("[A-Za-z0-9_.-]+"))
+        ) return "Invalid Open VSX package identifier.\\n"
         val metadata = getJson("https://open-vsx.org/api/$namespace/$packageName")
         val version = metadata.string("version")
         val downloadUrl = metadata.getAsJsonObject("files")?.stringOrNull("download")
             ?: return "Open VSX did not provide a download URL for $namespace.$packageName.\n"
+        if (!runCatching { URL(downloadUrl).protocol == "https" }.getOrDefault(false)) {
+            return "Open VSX returned an invalid download URL.\\n"
+        }
         val archive = getBytes(downloadUrl, MAX_PACKAGE_BYTES)
         val packageJsonBytes = readZipEntry(archive, "extension/package.json")
             ?: return "Invalid VSIX: extension/package.json is missing.\n"
@@ -255,7 +261,7 @@ Packages are downloaded from Open VSX. An internet connection is required.
             val languageId = grammarDef.stringOrNull("language")
                 ?: scope.substringAfterLast('.').ifBlank { packageName.lowercase(Locale.ROOT) }
             val id = languageId.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9._+-]"), "-")
-            if (id.isBlank()) return@forEachIndexed
+            if (!id.matches(Regex("[a-z0-9][a-z0-9._+-]*"))) return@forEachIndexed
             val grammarRel = safeRelativePath(grammarDef.string("path")) ?: return@forEachIndexed
             val grammarBytes = files["extension/$grammarRel"] ?: return@forEachIndexed
             val languageConfigRel = languages.firstOrNull { it.asJsonObject.stringOrNull("id") == languageId }
