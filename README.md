@@ -1,19 +1,21 @@
 # Universal Language Manager
 
-A Xed-Editor extension that installs and manages TextMate language grammars at runtime.
+A Xed-Editor extension for installing and managing TextMate syntax-highlighting grammars at runtime.
 
-## Requirements
+## Current language registry
 
-- Xed-Editor with extension support (minimum app version code: 95)
-- Xed Ubuntu terminal enabled
-- Internet access for searching and downloading grammar packs
+ULM currently ships one self-hosted language pack:
 
-## Install
+- **Astro** — `.astro` files, frontmatter, Astro components, and Astro code fences in MDX.
 
-1. Download the latest `.xed` package from the GitHub Actions artifact.
+Language packs are hosted in this repository under `ulm/`. ULM does not query or download packages from Open VSX.
+
+## Install the extension
+
+1. Download the latest `.xed` package from the successful GitHub Actions workflow artifact.
 2. In Xed-Editor, open **Settings → Store → Install from storage**.
 3. Select the downloaded `.xed` file.
-4. Open or restart the Xed Ubuntu terminal, then run:
+4. Open the Xed Ubuntu terminal and run:
 
 ```sh
 ulm help
@@ -26,43 +28,57 @@ The extension installs the `ulm` launcher into Xed's shared terminal bin directo
 | Command | Description |
 | --- | --- |
 | `ulm help` | Show command help |
-| `ulm search <query>` | Search Open VSX |
-| `ulm install <id or language>` | Download a VSIX and register its TextMate grammars |
-| `ulm remove <language-id>` | Remove an installed language |
+| `ulm search <query>` | Search the self-hosted ULM registry |
+| `ulm install astro` | Download and register the Astro grammar |
+| `ulm remove astro` | Remove the Astro grammar |
 | `ulm list` | List installed languages |
-| `ulm info <language-id>` | Show grammar and package details |
-| `ulm update [language-id]` | Update an installed package |
-| `ulm enable <language-id>` | Enable its file type |
-| `ulm disable <language-id>` | Disable its file type |
+| `ulm info astro` | Show grammar details |
+| `ulm update [astro]` | Update one or all installed packs |
+| `ulm enable astro` | Enable the Astro file type |
+| `ulm disable astro` | Disable the Astro file type |
 | `ulm status` | Show manager status |
 | `ulm version` | Show version |
 
 Example:
 
 ```sh
-ulm search python
-ulm install ms-python.python
+ulm search astro
+ulm install astro
 ulm list
-ulm info python
+ulm info astro
 ```
 
-Package IDs are provided by Open VSX. Search first if you are unsure of the exact ID.
+## Registry layout
+
+```text
+ulm/
+├── registry.json
+└── languages/
+    └── astro/
+        ├── metadata.json
+        ├── LICENSE
+        ├── language-configuration.json
+        └── grammars/
+            ├── astro.tmLanguage.json
+            └── mdx.astro.tmLanguage.json
+```
+
+The registry metadata records language IDs, extensions, TextMate scopes, grammar paths, versions, and optional injection grammars. The Astro grammar is sourced from the Astro language-tools project and retains its MIT license and attribution.
 
 ## How it works
 
 - The extension registers a small `ulm` shell launcher in Xed's own Ubuntu environment.
 - The launcher sends requests through a private shared-filesystem bridge to the loaded extension.
-- The extension queries Open VSX, downloads VSIX packages, validates package paths and extracts TextMate grammar/configuration files.
+- The extension reads the registry and language files from this repository over HTTPS.
 - Grammar files are exposed to Sora TextMate through a runtime `FileResolver`.
 - Installed language metadata and grammar files are stored under Xed's private shared home directory, so they persist across extension reloads.
 
-## Notes and limitations
+## Scope and limitations
 
-- This manages TextMate syntax grammars; it does not install language servers, compilers, runtimes, debuggers, or formatters.
-- A package may contain grammars that depend on other grammars or files. Packs with unusual external dependencies may not work fully.
+- ULM manages TextMate syntax highlighting only. It does not install language servers, compilers, runtimes, debuggers, or formatters.
+- Astro embedded-language highlighting depends on the corresponding TextMate grammars being available in Xed.
 - TextMate's global registry has no public unload API. After removing or updating a grammar that was already loaded, restart Xed-Editor to fully clear the old in-memory grammar.
-- A language pack may define multiple languages. Use the language IDs shown by `ulm list` and `ulm info`.
-- Only use grammar packs from publishers you trust.
+- Device installation and editor-runtime behavior must be tested in Xed-Editor.
 
 ## Development
 
@@ -77,4 +93,4 @@ The package is written to `output/io.github.orange.universal.xed`.
 
 ## License
 
-MIT
+The extension is MIT-licensed. The Astro grammar files include their upstream MIT license in `ulm/languages/astro/LICENSE`.
