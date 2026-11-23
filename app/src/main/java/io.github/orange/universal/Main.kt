@@ -1,4 +1,4 @@
-package io.github/orange/universal
+package io.github.orange.universal
 
 import androidx.annotation.Keep
 import com.rk.extension.ExtensionAPI
