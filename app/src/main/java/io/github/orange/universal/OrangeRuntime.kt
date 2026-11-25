@@ -392,12 +392,14 @@ Language packs are downloaded from the Orange GitHub repository when available.
             backup.deleteRecursively()
             val previousEntries = readInstalled()
             var movedPrevious = false
+            var installedNew = false
             try {
                 if (destination.exists()) {
                     if (!destination.renameTo(backup)) throw IllegalStateException("Could not preserve the previous language pack")
                     movedPrevious = true
                 }
                 if (!staging.renameTo(destination)) throw IllegalStateException("Could not install language assets")
+                installedNew = true
 
                 val entry = InstalledLanguage(
                     id = id,
@@ -417,7 +419,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
                 backup.deleteRecursively()
                 return "Installed ${entry.title} ${entry.version}\n  Scope: ${entry.scope}\n  Files: ${entry.extensions.joinToString { ".$it" }}\n"
             } catch (e: Exception) {
-                if (destination.exists()) destination.deleteRecursively()
+                if (installedNew && destination.exists()) destination.deleteRecursively()
                 if (movedPrevious && backup.exists() && !backup.renameTo(destination)) {
                     extensionContext.logError("Could not restore previous pack for $id")
                 }
