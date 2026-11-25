@@ -10,14 +10,14 @@ import com.rk.icons.Icon
 import java.util.Locale
 
 /**
- * Detects the active editor file extension and installs its matching bundled syntax pack.
+ * Detects the active editor file extension and downloads and installs its matching syntax pack from the online catalog.
  */
 internal class DetectInstallSyntaxCommand(
     private val runtime: UlmRuntime
 ) : EditorFileCommand() {
     override val id: String = "io.github.orange.universal.detect-install-syntax"
 
-    override fun getLabel(): String = "Detect & Install Syntax"
+    override fun getLabel(): String = "Detect & Download Syntax"
 
     override fun getIcon(): Icon = Icon.TextIcon("S")
 
