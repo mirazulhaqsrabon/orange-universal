@@ -265,8 +265,8 @@ Language packs are downloaded from the ULM GitHub repository when available.
             return buildString {
                 append("Online download test successful.\n")
                 append("GitHub catalog: OK\n")
-                append("Astro grammar: OK (\${grammarFile.length()} bytes)\n")
-                if (configFile != null) append("Astro configuration: OK (\${configFile.length()} bytes)\n")
+                append("Astro grammar: OK (" + grammarFile.length() + " bytes)\n")
+                if (configFile != null) append("Astro configuration: OK (" + configFile.length() + " bytes)\n")
                 append("Source: GitHub raw content\n")
             }
         } finally {
