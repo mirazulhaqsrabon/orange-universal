@@ -204,7 +204,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
 """
 
     private val remoteCatalogUrl =
-        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/bf113ea8ff97897b3fa31d159f847d39a1981cf6/language-packs/languages.json"
+        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/6beb40e734e850566131fe1510b5de43a3167e85/language-packs/languages.json"
 
     private fun catalog(): List<JsonObject> = try {
         val root = JsonParser.parseString(downloadText(remoteCatalogUrl)).asJsonObject
@@ -247,7 +247,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
         if (!languageId.matches(Regex("[a-z0-9][a-z0-9._+-]*")) || safeAssetName(assetName) == null) {
             throw IllegalArgumentException("Invalid remote asset path")
         }
-        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/bf113ea8ff97897b3fa31d159f847d39a1981cf6/language-packs/" + languageId + "/" + assetName
+        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/6beb40e734e850566131fe1510b5de43a3167e85/language-packs/" + languageId + "/" + assetName
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 12000
         connection.readTimeout = 30000
