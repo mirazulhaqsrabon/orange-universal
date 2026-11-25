@@ -159,15 +159,16 @@ rm -f "@@DOLLAR@@OUT"
 
 Usage:
   ulm help                    Show command help
-  ulm search <query>          Search bundled languages
-  ulm install <language-id>   Install a bundled language
+  ulm search <query>          Search online language catalog
+  ulm install <language-id>   Download and install a language
   ulm remove <language-id>    Remove an installed language
   ulm list                    List installed languages
   ulm info <language-id>      Show language details
-  ulm update [language-id]    Reinstall from bundled assets
+  ulm update [language-id]    Download and reinstall language assets
   ulm enable <language-id>    Enable a language file type
   ulm disable <language-id>   Disable a language file type
   ulm status                  Show manager status
+  ulm test-online             Test GitHub catalog and asset download
   ulm version                 Show version
 
 Example:
