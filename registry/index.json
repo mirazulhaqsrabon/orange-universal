@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "languages": [
+    {
+      "id": "astro",
+      "title": "Astro",
+      "extensions": ["astro"],
+      "scopeName": "text.html.astro",
+      "grammarUrl": "https://raw.githubusercontent.com/stackblitz/textmate/main/grammars/astro/syntaxes/astro.tmLanguage.json"
+    }
+  ]
+}
