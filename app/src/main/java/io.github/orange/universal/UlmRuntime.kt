@@ -205,15 +205,15 @@ Language grammars and metadata are bundled inside this extension.
 
     fun installForExtension(extensionInput: String): String {
         val extension = extensionInput.removePrefix(".").lowercase(Locale.ROOT)
-        if (extension.isBlank()) return "The active file has no extension.\\n"
+        if (extension.isBlank()) return "The active file has no extension.\n"
 
         val metadata = catalog().firstOrNull { item ->
             item.getAsJsonArray("extensions")?.any { it.asString.removePrefix(".").equals(extension, true) } == true
-        } ?: return "No syntax pack is available for '.$extension' yet.\\n"
+        } ?: return "No syntax pack is available for '.$extension' yet.\n"
 
         val id = metadata.string("id")
         val installed = readInstalled().firstOrNull { it.id.equals(id, true) }
-        if (installed?.enabled == true) return "${installed.title} syntax is already enabled.\\n"
+        if (installed?.enabled == true) return "${installed.title} syntax is already enabled.\n"
         if (installed != null) return setEnabled(id, true)
         return install(id)
     }
