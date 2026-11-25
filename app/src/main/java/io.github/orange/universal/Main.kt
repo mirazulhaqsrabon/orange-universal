@@ -2,6 +2,7 @@ package io.github.orange.universal
 
 import androidx.annotation.Keep
 import com.rk.commands.CommandProvider
+import com.rk.commands.ToolbarConfiguration
 import com.rk.extension.ExtensionAPI
 import com.rk.extension.ExtensionContext
 import com.rk.extension.api.DisposableManager
@@ -16,6 +17,9 @@ class Main(context: ExtensionContext) : ExtensionAPI(context) {
         runtime = UlmRuntime(context)
         runtime.start()
         CommandProvider.registerCommand(UlmPaletteCommand(), disposables)
+        val detectSyntaxCommand = DetectInstallSyntaxCommand(runtime)
+        CommandProvider.registerCommand(detectSyntaxCommand, disposables)
+        ToolbarConfiguration.addEditorToolbarCommand(detectSyntaxCommand)
     }
 
     override fun onDispose() {
