@@ -19,7 +19,7 @@ class Main(context: ExtensionContext) : ExtensionAPI(context) {
         runtime.start()
 
         // Orange is the only registered editor/menu command.
-        orangeCommand = OrangeCommand(runtime)
+        orangeCommand = OrangeCommand(runtime, context.resources)
         CommandProvider.registerCommand(orangeCommand, disposables)
         ToolbarConfiguration.addEditorToolbarCommand(orangeCommand)
     }
