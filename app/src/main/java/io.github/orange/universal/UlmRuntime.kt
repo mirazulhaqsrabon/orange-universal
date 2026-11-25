@@ -11,6 +11,8 @@ import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
 import io.github.rosemoe.sora.langs.textmate.registry.provider.FileResolver
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 
 internal data class InstalledLanguage(
@@ -147,6 +149,7 @@ rm -f "@@DOLLAR@@OUT"
             "enable" -> if (args.size != 2) "Usage: ulm enable <language-id>\n" else setEnabled(args[1], true)
             "disable" -> if (args.size != 2) "Usage: ulm disable <language-id>\n" else setEnabled(args[1], false)
             "status" -> status()
+            "test-online", "online" -> testOnlineDownload()
             "version", "--version", "-v" -> "Universal Language Manager 1.0.0\n"
             else -> "Unknown command: ${args[0]}\nRun 'ulm help' for usage.\n"
         }
@@ -173,14 +176,91 @@ Example:
   ulm list
   ulm remove astro
 
-Language grammars and metadata are bundled inside this extension.
+Language packs are downloaded from the ULM GitHub repository when available.
 """
 
+    private val remoteCatalogUrl =
+        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/detect-install-syntax/language-packs/languages.json"
+
     private fun catalog(): List<JsonObject> {
-        val root = extensionContext.assets.open("languages.json").bufferedReader().use {
-            JsonParser.parseReader(it).asJsonObject
+        val root = runCatching {
+            JsonParser.parseString(downloadText(remoteCatalogUrl)).asJsonObject
+        }.getOrElse {
+            extensionContext.logWarn("Could not load online language catalog; using bundled catalog: " + it.message)
+            extensionContext.assets.open("languages.json").bufferedReader().use {
+                JsonParser.parseReader(it).asJsonObject
+            }
         }
         return root.getAsJsonArray("languages")?.map { it.asJsonObject } ?: emptyList()
+    }
+
+    private fun downloadText(url: String): String {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 12000
+        connection.readTimeout = 20000
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("User-Agent", "Universal-Language-Manager/1.1")
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) throw IllegalStateException("HTTP $code while downloading catalog")
+            if (connection.contentLengthLong > 2L * 1024L * 1024L) throw IllegalStateException("Remote catalog exceeds 2 MB")
+            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun downloadRemoteAsset(languageId: String, assetName: String, destination: File) {
+        if (!languageId.matches(Regex("[a-z0-9][a-z0-9._+-]*")) || safeAssetName(assetName) == null) {
+            throw IllegalArgumentException("Invalid remote asset path")
+        }
+        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/detect-install-syntax/language-packs/" + languageId + "/" + assetName
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = 12000
+        connection.readTimeout = 30000
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("User-Agent", "Universal-Language-Manager/1.1")
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) throw IllegalStateException("HTTP $code downloading $assetName")
+            if (connection.contentLengthLong > 20L * 1024L * 1024L) throw IllegalStateException("Remote asset exceeds 20 MB")
+            destination.parentFile?.mkdirs()
+            connection.inputStream.use { input ->
+                destination.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > 20L * 1024L * 1024L) throw IllegalStateException("Remote asset exceeds 20 MB")
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            if (!destination.isFile || destination.length() == 0L) throw IllegalStateException("Downloaded asset is empty")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun testOnlineDownload(): String {
+        val root = JsonParser.parseString(downloadText(remoteCatalogUrl)).asJsonObject
+        val languages = root.getAsJsonArray("languages") ?: throw IllegalStateException("Online catalog has no languages")
+        val astro = languages.map { it.asJsonObject }.firstOrNull { it.stringOrNull("id") == "astro" }
+            ?: throw IllegalStateException("Astro pack is missing from online catalog")
+        val grammarName = safeAssetName(astro.string("grammar")) ?: throw IllegalStateException("Invalid grammar filename")
+        val testFile = File(grammarDir, ".online-download-test.tmp")
+        try {
+            downloadRemoteAsset("astro", grammarName, testFile)
+            val grammar = JsonParser.parseString(testFile.readText()).asJsonObject
+            if (grammar.stringOrNull("scopeName") != astro.stringOrNull("scopeName")) {
+                throw IllegalStateException("Downloaded grammar scope does not match catalog")
+            }
+            return "Online download test successful.\nGitHub catalog: OK\nGrammar asset: OK\nDownloaded: " + testFile.length() + " bytes\n"
+        } finally {
+            testFile.delete()
+        }
     }
 
     private fun search(query: String): String {
@@ -241,7 +321,9 @@ Language grammars and metadata are bundled inside this extension.
         if (!staging.mkdirs()) throw IllegalStateException("Could not create language staging directory")
 
         try {
-            copyAsset(grammarName, File(staging, grammarName))
+            val grammarFile = File(staging, grammarName)
+            runCatching { downloadRemoteAsset(id, grammarName, grammarFile) }
+                .getOrElse { extensionContext.logWarn("Online grammar download failed; using bundled asset: " + it.message); copyAsset(grammarName, grammarFile) }
             val grammarJson = JsonParser.parseString(File(staging, grammarName).readText()).asJsonObject
             if (grammarJson.stringOrNull("scopeName") != scope) {
                 throw IllegalArgumentException("Grammar scope does not match languages.json")
@@ -249,7 +331,9 @@ Language grammars and metadata are bundled inside this extension.
 
             var configurationPath: String? = null
             if (configName != null) {
-                copyAsset(configName, File(staging, configName))
+                val configFile = File(staging, configName)
+                runCatching { downloadRemoteAsset(id, configName, configFile) }
+                    .getOrElse { extensionContext.logWarn("Online config download failed; using bundled asset: " + it.message); copyAsset(configName, configFile) }
                 JsonParser.parseString(File(staging, configName).readText())
                 configurationPath = "ulm/grammars/$id/$configName"
             }
