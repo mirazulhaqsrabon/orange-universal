@@ -100,7 +100,7 @@ val outputFile = project.layout.projectDirectory.file("libs/$ASSET_NAME")
 
 tasks.register<DefaultTask>("downloadLatestJar") {
     outputs.upToDateWhen { false }
-    description = "Checks and downloads the latest $ASSET_NAME from GitHub."
+    description = "Downloads the Xed-Editor SDK JAR from GitHub."
     group = "build"
 
     outputs.file(outputFile)
@@ -110,15 +110,20 @@ tasks.register<DefaultTask>("downloadLatestJar") {
         outputFile.asFile.parentFile.mkdirs()
         timestampFile.get().asFile.parentFile.mkdirs()
 
-        val remoteUpdatedAt: String
-        try {
-            val json = URI.create(API_URL).toURL().readText()
+        // GitHub's unauthenticated API can return HTTP 403 when its shared
+        // rate limit is exhausted. The release asset URL is independent of
+        // the API, so API failure must not prevent a normal build.
+        val remoteUpdatedAt = try {
+            val connection = URI.create(API_URL).toURL().openConnection()
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            val json = connection.getInputStream().bufferedReader().use { it.readText() }
             val release = Gson().fromJson(json, JsonObject::class.java)
-            remoteUpdatedAt = release.get("updated_at")?.asString
-                ?: throw GradleException("GitHub API response does not contain 'updated_at'.")
+            release.get("updated_at")?.asString
         } catch (e: Exception) {
-            logger.error("Failed to fetch GitHub API at $API_URL", e)
-            throw GradleException("Could not check latest release timestamp.", e)
+            logger.warn("Could not read SDK release metadata (possibly GitHub API rate limit). Will download the SDK asset directly.")
+            null
         }
 
         val storedUpdatedAt = if (timestampFile.get().asFile.exists()) {
@@ -127,24 +132,36 @@ tasks.register<DefaultTask>("downloadLatestJar") {
             null
         }
 
-        if (remoteUpdatedAt == storedUpdatedAt) {
-            println("✅ $ASSET_NAME is up to date (Timestamp: $remoteUpdatedAt). Skipping download.")
+        if (remoteUpdatedAt != null && remoteUpdatedAt == storedUpdatedAt && outputFile.asFile.exists()) {
+            println("✅ $ASSET_NAME is up to date (Timestamp: $remoteUpdatedAt).")
             return@doLast
         }
 
-        println("Release updated ($storedUpdatedAt -> $remoteUpdatedAt). Downloading new JAR...")
+        println("Downloading $ASSET_NAME from the GitHub release asset...")
 
+        val tempFile = File(outputFile.asFile.parentFile, "$ASSET_NAME.download")
         try {
-            URI.create(DOWNLOAD_URL).toURL().openStream().use { inputStream ->
-                outputFile.asFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
+            val connection = URI.create(DOWNLOAD_URL).toURL().openConnection()
+            connection.connectTimeout = 20000
+            connection.readTimeout = 30000
+            connection.getInputStream().use { input ->
+                tempFile.outputStream().use { output -> input.copyTo(output) }
             }
-            timestampFile.get().asFile.writeText(remoteUpdatedAt)
+            if (!tempFile.exists() || tempFile.length() == 0L) {
+                throw GradleException("Downloaded $ASSET_NAME is empty.")
+            }
+            if (!tempFile.renameTo(outputFile.asFile)) {
+                outputFile.asFile.writeBytes(tempFile.readBytes())
+                tempFile.delete()
+            }
+            if (remoteUpdatedAt != null) {
+                timestampFile.get().asFile.writeText(remoteUpdatedAt)
+            }
             println("Successfully downloaded $ASSET_NAME to ${outputFile.asFile.path}")
         } catch (e: Exception) {
+            tempFile.delete()
             logger.error("Failed to download JAR from $DOWNLOAD_URL", e)
-            throw GradleException("Download failed.", e)
+            throw GradleException("SDK JAR download failed. Check the GitHub release asset URL.", e)
         }
     }
 }
