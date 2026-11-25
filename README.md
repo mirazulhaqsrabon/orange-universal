@@ -57,9 +57,13 @@ ulm help
 
 The launcher is installed in Xed's own shared terminal environment; it does not modify unrelated Android or Ubuntu installations.
 
+## Orange editor menu
+
+The editor's three-dot overflow menu includes **Orange**. Selecting it opens an Orange command palette with **Universal Language Manager** and **Detect & Download Syntax** actions. The entry is registered through Xed's editor-toolbar command API and is removed from the toolbar action list when the extension is disposed. On narrow screens, Xed places the overflow actions in the three-dot menu.
+
 ## Active-file syntax detection
 
-The editor toolbar includes **Detect & Install Syntax**. It reads the active file's extension and installs or enables the matching language pack from the online catalog. The default shortcut is **Ctrl+Shift+L**.
+The **Detect & Download Syntax** action reads the active file's extension and installs or enables the matching language pack from the online catalog. The default shortcut is **Ctrl+Shift+L**.
 
 The online catalog currently contains Astro only, so `.astro` is the only supported remote pack. Add more packs under `language-packs/<id>/` and register them in `language-packs/languages.json`.
 
