@@ -57,6 +57,12 @@ ulm help
 
 The launcher is installed in Xed's own shared terminal environment; it does not modify unrelated Android or Ubuntu installations.
 
+## Active-file syntax detection
+
+The editor toolbar includes **Detect & Install Syntax**. It reads the active file's extension and installs or enables the matching language pack from the extension's bundled catalog. The default shortcut is **Ctrl+Shift+L**.
+
+The current bundled catalog contains Astro only, so this command currently detects and installs syntax for `.astro` files. Other extensions report that no matching pack is available; this feature does not download arbitrary grammars from the internet.
+
 ## Commands
 
 | Command | Description |
