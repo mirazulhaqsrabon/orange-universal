@@ -13,7 +13,7 @@ import java.util.Locale
  * Detects the active file extension and downloads/installs its syntax pack.
  */
 internal class OrangeCommand(
-    private val runtime: UlmRuntime,
+    private val runtime: OrangeRuntime,
     private val resources: Resources
 ) : EditorFileCommand() {
     override val id: String = "io.github.orange.universal.orange"
@@ -33,7 +33,7 @@ internal class OrangeCommand(
         if (extension.isBlank()) {
             AlertDialog.Builder(activity)
                 .setTitle("Orange")
-                .setMessage("No file extension found for: $fileName")
+                .setMessage("No file extension found for: $fileName\n\nOwner: Miraz")
                 .setPositiveButton("OK", null)
                 .show()
             return
@@ -49,7 +49,7 @@ internal class OrangeCommand(
                 if (!activity.isFinishing && !activity.isDestroyed) {
                     AlertDialog.Builder(activity)
                         .setTitle("Orange · .$extension")
-                        .setMessage(result.trim())
+                        .setMessage("${result.trim()}\n\nOwner: Miraz")
                         .setPositiveButton("OK", null)
                         .show()
                 }

@@ -26,32 +26,51 @@ internal data class InstalledLanguage(
     val enabled: Boolean = true
 )
 
-internal class UlmRuntime(
+internal class OrangeRuntime(
     private val extensionContext: com.rk.extension.ExtensionContext
 ) {
     private val gson = Gson()
     private val privateRoot = extensionContext.appContext.filesDir.parentFile
         ?: throw IllegalStateException("Xed private directory is unavailable")
     private val home = File(privateRoot, "local/home")
-    private val data = File(home, ".local/share/ulm")
+    private val data = File(home, ".local/share/orange")
     private val requestDir = File(data, "bridge/requests")
     private val responseDir = File(data, "bridge/responses")
     private val grammarDir = File(data, "grammars")
     private val metadataFile = File(data, "installed.json")
-    private val cliFile = File(privateRoot, "local/bin/ulm")
+    private val cliFile = File(privateRoot, "local/bin/orange")
     private val registeredTypes = mutableMapOf<String, FileType>()
     @Volatile private var running = false
     private var worker: Thread? = null
 
     private val resolver = FileResolver { requestedPath ->
-        if (!requestedPath.startsWith("ulm/")) null else runCatching {
+        if (!requestedPath.startsWith("orange/")) null else runCatching {
             val root = data.canonicalFile
-            val file = File(root, requestedPath.removePrefix("ulm/")).canonicalFile
+            val file = File(root, requestedPath.removePrefix("orange/")).canonicalFile
             if (file.path.startsWith(root.path + File.separator) && file.isFile) file.inputStream() else null
         }.getOrNull()
     }
 
+    private fun migrateLegacyData() {
+        val legacyData = File(home, ".local/share/ulm")
+        if (!legacyData.exists() || data.exists()) return
+
+        if (!legacyData.renameTo(data)) {
+            extensionContext.logWarn("Could not migrate the previous language-pack data directory.")
+            return
+        }
+
+        if (metadataFile.isFile) {
+            val migrated = metadataFile.readText()
+                .replace("\"ulm/", "\"orange/")
+            metadataFile.writeText(migrated)
+        }
+
+        File(privateRoot, "local/bin/ulm").delete()
+    }
+
     fun start() {
+        migrateLegacyData()
         data.mkdirs()
         requestDir.mkdirs()
         responseDir.mkdirs()
@@ -72,10 +91,10 @@ internal class UlmRuntime(
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
                 } catch (e: Exception) {
-                    extensionContext.logError("ULM bridge error: ${e.message}")
+                    extensionContext.logError("Orange bridge error: ${e.message}")
                 }
             }
-        }, "ulm-command-bridge").apply {
+        }, "orange-command-bridge").apply {
             isDaemon = true
             start()
         }
@@ -94,7 +113,7 @@ internal class UlmRuntime(
     private fun installCli() {
         val script = """#!/bin/sh
 set -eu
-BASE="@@DOLLAR@@{HOME:-/home}/.local/share/ulm/bridge"
+BASE="@@DOLLAR@@{HOME:-/home}/.local/share/orange/bridge"
 REQ="@@DOLLAR@@BASE/requests"
 RES="@@DOLLAR@@BASE/responses"
 mkdir -p "@@DOLLAR@@REQ" "@@DOLLAR@@RES"
@@ -108,7 +127,7 @@ while [ ! -f "@@DOLLAR@@OUT" ]; do
   COUNT=@@DOLLAR@@((COUNT + 1))
   if [ "@@DOLLAR@@COUNT" -ge 3600 ]; then
     rm -f "@@DOLLAR@@REQ/@@DOLLAR@@ID"
-    echo "ulm: extension did not respond. Make sure ULM is enabled in Xed."
+    echo "orange: extension did not respond. Make sure Orange is enabled in Xed."
     exit 1
   fi
   sleep 0.1
@@ -130,7 +149,7 @@ rm -f "@@DOLLAR@@OUT"
             if (published.exists()) published.delete()
             if (!response.renameTo(published)) throw IllegalStateException("Could not publish command response")
         } catch (e: Exception) {
-            File(responseDir, request.name).writeText("ulm: error: ${e.message ?: e.javaClass.simpleName}\n")
+            File(responseDir, request.name).writeText("orange: error: ${e.message ?: e.javaClass.simpleName}\n")
         } finally {
             request.delete()
         }
@@ -141,43 +160,43 @@ rm -f "@@DOLLAR@@OUT"
         return when (args[0].lowercase(Locale.ROOT)) {
             "help", "--help", "-h" -> help()
             "search" -> search(args.drop(1).joinToString(" "))
-            "install", "add" -> if (args.size != 2) "Usage: ulm install <language-id>\n" else install(args[1])
-            "remove", "uninstall" -> if (args.size != 2) "Usage: ulm remove <language-id>\n" else remove(args[1])
+            "install", "add" -> if (args.size != 2) "Usage: orange install <language-id>\n" else install(args[1])
+            "remove", "uninstall" -> if (args.size != 2) "Usage: orange remove <language-id>\n" else remove(args[1])
             "list", "ls" -> listLanguages()
-            "info" -> if (args.size != 2) "Usage: ulm info <language-id>\n" else info(args[1])
+            "info" -> if (args.size != 2) "Usage: orange info <language-id>\n" else info(args[1])
             "update" -> update(args.getOrNull(1))
-            "enable" -> if (args.size != 2) "Usage: ulm enable <language-id>\n" else setEnabled(args[1], true)
-            "disable" -> if (args.size != 2) "Usage: ulm disable <language-id>\n" else setEnabled(args[1], false)
+            "enable" -> if (args.size != 2) "Usage: orange enable <language-id>\n" else setEnabled(args[1], true)
+            "disable" -> if (args.size != 2) "Usage: orange disable <language-id>\n" else setEnabled(args[1], false)
             "status" -> status()
             "test-online", "online" -> testOnlineDownload()
             "version", "--version", "-v" -> "Orange 1.0.0\n"
-            else -> "Unknown command: ${args[0]}\nRun 'ulm help' for usage.\n"
+            else -> "Unknown command: ${args[0]}\nRun 'orange help' for usage.\n"
         }
     }
 
-    private fun help() = """Universal Language Manager (ULM) 1.0.0
+    private fun help() = """Orange 1.0.0
 
 Usage:
-  ulm help                    Show command help
-  ulm search <query>          Search online language catalog
-  ulm install <language-id>   Download and install a language
-  ulm remove <language-id>    Remove an installed language
-  ulm list                    List installed languages
-  ulm info <language-id>      Show language details
-  ulm update [language-id]    Download and reinstall language assets
-  ulm enable <language-id>    Enable a language file type
-  ulm disable <language-id>   Disable a language file type
-  ulm status                  Show manager status
-  ulm test-online             Test GitHub catalog and asset download
-  ulm version                 Show version
+  orange help                    Show command help
+  orange search <query>          Search online language catalog
+  orange install <language-id>   Download and install a language
+  orange remove <language-id>    Remove an installed language
+  orange list                    List installed languages
+  orange info <language-id>      Show language details
+  orange update [language-id]    Download and reinstall language assets
+  orange enable <language-id>    Enable a language file type
+  orange disable <language-id>   Disable a language file type
+  orange status                  Show manager status
+  orange test-online             Test GitHub catalog and asset download
+  orange version                 Show version
 
 Example:
-  ulm search astro
-  ulm install astro
-  ulm list
-  ulm remove astro
+  orange search astro
+  orange install astro
+  orange list
+  orange remove astro
 
-Language packs are downloaded from the ULM GitHub repository when available.
+Language packs are downloaded from the Orange GitHub repository when available.
 """
 
     private val remoteCatalogUrl =
@@ -196,7 +215,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         connection.connectTimeout = 12000
         connection.readTimeout = 20000
         connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Universal-Language-Manager/1.1")
+        connection.setRequestProperty("User-Agent", "Orange/1.1")
         try {
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("HTTP $code while downloading catalog")
@@ -216,7 +235,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         connection.connectTimeout = 12000
         connection.readTimeout = 30000
         connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Universal-Language-Manager/1.1")
+        connection.setRequestProperty("User-Agent", "Orange/1.1")
         try {
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("HTTP $code downloading $assetName")
@@ -276,7 +295,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
     }
 
     private fun search(query: String): String {
-        if (query.isBlank()) return "Usage: ulm search <query>\n"
+        if (query.isBlank()) return "Usage: orange search <query>\n"
         val matches = catalog().filter { item ->
             item.stringOrNull("id").orEmpty().contains(query, true) ||
                 item.stringOrNull("name").orEmpty().contains(query, true) ||
@@ -290,7 +309,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
                 val extensionList = item.getAsJsonArray("extensions").joinToString { ".${it.asString.removePrefix(".")}" }
                 append("• $id — ${item.string("name")}\n")
                 append("  Extensions: $extensionList\n")
-                append("  Install: ulm install $id\n")
+                append("  Install: orange install $id\n")
             }
         }
     }
@@ -312,7 +331,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         val id = idInput.lowercase(Locale.ROOT)
         if (!id.matches(Regex("[a-z0-9][a-z0-9._+-]*"))) return "Invalid language id.\n"
         val metadata = catalog().firstOrNull { it.stringOrNull("id").equals(id, true) }
-            ?: return "Language '$id' is not available in the online GitHub catalog. Try: ulm search astro\n"
+            ?: return "Language '$id' is not available in the online GitHub catalog. Try: orange search astro\n"
 
         val scope = metadata.string("scopeName")
         if (!scope.matches(Regex("[A-Za-z0-9_.+-]+"))) throw IllegalArgumentException("Invalid TextMate scope")
@@ -343,7 +362,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
                 val configFile = File(staging, configName)
                 downloadRemoteAsset(id, configName, configFile)
                 JsonParser.parseString(File(staging, configName).readText())
-                configurationPath = "ulm/grammars/$id/$configName"
+                configurationPath = "orange/grammars/$id/$configName"
             }
 
             val destination = File(grammarDir, id)
@@ -355,7 +374,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
                 title = metadata.string("name"),
                 scope = scope,
                 extensions = extensions,
-                grammar = "ulm/grammars/$id/$grammarName",
+                grammar = "orange/grammars/$id/$grammarName",
                 configuration = configurationPath,
                 version = metadata.stringOrNull("version") ?: "1.0.0",
                 enabled = true
@@ -407,7 +426,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
 
     private fun listLanguages(): String {
         val entries = readInstalled()
-        if (entries.isEmpty()) return "No languages installed yet. Try: ulm search astro\n"
+        if (entries.isEmpty()) return "No languages installed yet. Try: orange search astro\n"
         return buildString {
             append("Installed languages (${entries.size}):\n")
             entries.forEach { entry ->
@@ -457,7 +476,7 @@ Registry: GitHub online catalog
         writeGrammarRegistry(entries)
         entries.filter { it.enabled }.forEach { entry ->
             runCatching {
-                val type = UlmFileType(entry)
+                val type = OrangeFileType(entry)
                 FileTypeManager.register(type)
                 registeredTypes[entry.id] = type
             }.onFailure {
@@ -469,7 +488,7 @@ Registry: GitHub online catalog
     private fun registerLanguage(entry: InstalledLanguage) {
         writeGrammarRegistry(readInstalled())
         registeredTypes.remove(entry.id)?.let { FileTypeManager.unregister(it) }
-        val type = UlmFileType(entry)
+        val type = OrangeFileType(entry)
         FileTypeManager.register(type)
         registeredTypes[entry.id] = type
     }
@@ -494,7 +513,7 @@ Registry: GitHub online catalog
         temporary.writeText(gson.toJson(definition))
         if (registryFile.exists() && !registryFile.delete()) throw IllegalStateException("Could not replace grammar registry")
         if (!temporary.renameTo(registryFile)) throw IllegalStateException("Could not publish grammar registry")
-        GrammarRegistry.getInstance().loadGrammars("ulm/registry/languages.json")
+        GrammarRegistry.getInstance().loadGrammars("orange/registry/languages.json")
     }
 
     private fun readInstalled(): List<InstalledLanguage> {

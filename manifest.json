@@ -5,13 +5,18 @@
   "name": "Orange",
   "type": "extension",
   "version": "1.0.0",
-  "description": "Detects the active file and downloads its TextMate syntax pack from GitHub.",
+  "description": "Automatically detects the active file and installs its matching syntax highlighting pack.",
   "author": {
-    "displayName": "miraz",
+    "displayName": "Miraz",
     "github": "mirazulhaqsrabon"
   },
   "minAppVersion": 95,
   "repository": "https://github.com/mirazulhaqsrabon/orange-universal",
   "license": "MIT",
-  "tags": ["language", "syntax-highlighting", "textmate", "download"]
+  "tags": [
+    "language",
+    "syntax-highlighting",
+    "textmate",
+    "download"
+  ]
 }

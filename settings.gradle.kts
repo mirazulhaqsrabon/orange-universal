@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Orange Universal"
+rootProject.name = "Orange"
 include(":app")

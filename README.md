@@ -1,62 +1,58 @@
 # Orange
 
-Orange is a Xed-Editor extension with one simple editor-menu action. Tap **Orange** while a file is open and it detects that file's extension, downloads the matching TextMate grammar from the GitHub language catalog, and installs it into Xed.
+Orange is a Xed-Editor extension that detects the active file type and downloads the matching TextMate syntax pack.
 
-## How it works
+## Features
 
-1. Open a file in Xed.
-2. Open the editor menu and tap **Orange**.
-3. Orange detects the active file extension (for example, `.astro`).
-4. It downloads and validates the matching grammar/configuration from this repository's online language pack registry, then installs it.
+- One **Orange** action in the editor menu and toolbar
+- Detects the active file extension automatically
+- Downloads and validates matching grammar and language configuration files
+- Registers the language with Xed-Editor
+- Restores installed language packs after the extension reloads
+- Displays clear download results with the project owner attribution
 
-There is no separate ULM command, command palette, or keyboard shortcut. Orange is the only extension menu action.
+## Use
+
+1. Open a source file in Xed-Editor.
+2. Select **Orange** from the editor menu or toolbar.
+3. Orange detects the file extension and checks the online catalog.
+4. If a matching pack is available, Orange downloads, validates, and installs it.
 
 ## Online language catalog
 
-Orange reads `language-packs/languages.json` from this branch. Grammar and configuration files are downloaded from `language-packs/<id>/`.
+The catalog is stored at `language-packs/languages.json`. Each language pack lives in `language-packs/<id>/`.
 
-Current online language pack:
+Currently available:
 
-- **Astro** — `.astro` files, using the Astro TextMate grammar.
+- **Astro** — `.astro` files
 
-## Add another language
+## Add a language pack
 
-1. Create `language-packs/<id>/` on the `feature/orange-menu-download` branch.
-2. Add its TextMate grammar and optional language configuration to that folder.
-3. Add an entry to `language-packs/languages.json` with matching file names, extensions and TextMate scope.
-4. Ensure the registry `scopeName` exactly matches the grammar file's `scopeName`.
-5. Verify the GitHub Raw URLs and JSON files.
-
-## Install the extension
-
-1. Download the `.xed` package from a successful GitHub Actions build artifact.
-2. In Xed-Editor, open **Settings → Store → Install from storage**.
-3. Select the downloaded `.xed` file.
-
-## Runtime design
-
-- The **Orange** menu command works on the currently active editor file.
-- The extension reads the online language catalog and matches the file extension.
-- Grammar/configuration assets are fetched from GitHub Raw over HTTPS, validated, and installed into Xed's private data directory.
-- Installed languages persist across extension reloads.
-- If a matching pack is already installed, tapping Orange downloads and installs it again so the local copy is refreshed.
-- If no matching language pack exists, Orange displays a clear message.
-
-## Scope and limitations
-
-- Orange manages TextMate syntax highlighting and Xed file-type registration only. It does not install language servers, compilers, runtimes, debuggers, or formatters.
-- The online catalog currently includes Astro only; more packs can be added under `language-packs/<id>/` with a matching registry entry.
-- Actual editor behavior must be tested in Xed-Editor.
+1. Create `language-packs/<id>/`.
+2. Add the TextMate grammar and optional language configuration.
+3. Add the pack metadata to `language-packs/languages.json`.
+4. Ensure the catalog `scopeName` matches the grammar's `scopeName`.
+5. Verify the raw GitHub asset URLs and JSON files.
 
 ## Build
+
+Requirements: JDK 21 and Android SDK/build tools compatible with the Xed-Editor extension SDK.
 
 ```sh
 ./compileDebug
 ./compileRelease
 ```
 
-The extension package is written to `output/io.github.orange.universal.xed`.
+The packaged extension is written to `output/io.github.orange.universal.xed`.
 
-## License
+## Data and compatibility
 
-The extension is MIT-licensed. The Astro grammar is sourced from the Astro language-tools project and is distributed under its upstream MIT license.
+Orange stores its data under `~/.local/share/orange`. On first launch after upgrading from an earlier build, it attempts a one-time migration of the previous language-pack data so installed packs remain available.
+
+## Project
+
+- **Owner:** Miraz
+- **Repository:** https://github.com/mirazulhaqsrabon/orange-universal
+- **License:** MIT
+
+The Astro grammar retains its upstream license notice in `language-packs/astro/ASTRO-LICENSE.txt`.

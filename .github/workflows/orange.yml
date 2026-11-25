@@ -1,4 +1,4 @@
-name: orange
+name: Orange CI
 
 on:
   schedule:
@@ -55,5 +55,5 @@ jobs:
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
-          name: universal-language-manager
+          name: Orange CI-extension
           path: output/*.xed

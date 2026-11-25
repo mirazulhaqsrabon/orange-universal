@@ -4,9 +4,9 @@ import com.rk.file.FileType
 import com.rk.icons.Icon
 
 /**
- * Xed file type backed by a dynamically installed ULM language pack.
+ * Xed file type backed by a dynamically installed Orange language pack.
  */
-internal class UlmFileType(
+internal class OrangeFileType(
     private val language: InstalledLanguage
 ) : FileType {
     override val extensions: List<String> = language.extensions
