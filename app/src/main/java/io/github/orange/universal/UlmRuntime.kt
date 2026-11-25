@@ -304,9 +304,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         } ?: return "No syntax pack is available for '.$extension' yet.\n"
 
         val id = metadata.string("id")
-        val installed = readInstalled().firstOrNull { it.id.equals(id, true) }
-        if (installed?.enabled == true) return "${installed.title} syntax is already enabled.\n"
-        if (installed != null && !installed.enabled) return setEnabled(id, true)
+        // Always fetch a fresh copy when the user taps Orange.
         return install(id)
     }
 
