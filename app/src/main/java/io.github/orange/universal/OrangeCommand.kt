@@ -1,6 +1,7 @@
 package io.github.orange.universal
 
 import android.app.AlertDialog
+import android.content.res.Resources
 import com.rk.commands.EditorFileActionContext
 import com.rk.commands.EditorFileCommand
 import com.rk.commands.EditorFileNonActionContext
@@ -12,13 +13,14 @@ import java.util.Locale
  * Detects the active file extension and downloads/installs its syntax pack.
  */
 internal class OrangeCommand(
-    private val runtime: UlmRuntime
+    private val runtime: UlmRuntime,
+    private val resources: Resources
 ) : EditorFileCommand() {
     override val id: String = "io.github.orange.universal.orange"
 
     override fun getLabel(): String = "Orange"
 
-    override fun getIcon(): Icon = Icon.ResourceIcon(R.drawable.orange_download)
+    override fun getIcon(): Icon = Icon.ExternalResourceIcon(R.drawable.orange_download, resources)
 
     override fun isSupported(context: EditorFileNonActionContext): Boolean =
         context.file.isFile()
