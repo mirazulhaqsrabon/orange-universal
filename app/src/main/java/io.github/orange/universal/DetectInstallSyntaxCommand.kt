@@ -44,7 +44,7 @@ internal class DetectInstallSyntaxCommand(
 
         Thread({
             val result = runCatching { runtime.installForExtension(extension) }
-                .getOrElse { "Could not install syntax: ${it.message ?: it.javaClass.simpleName}\\n" }
+                .getOrElse { "Could not install syntax: ${it.message ?: it.javaClass.simpleName}\n" }
 
             activity.runOnUiThread {
                 if (!activity.isFinishing && !activity.isDestroyed) {
