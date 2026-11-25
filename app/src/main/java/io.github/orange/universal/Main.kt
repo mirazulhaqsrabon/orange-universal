@@ -18,17 +18,8 @@ class Main(context: ExtensionContext) : ExtensionAPI(context) {
         runtime = UlmRuntime(context)
         runtime.start()
 
-        val ulmPaletteCommand = UlmPaletteCommand()
-        CommandProvider.registerCommand(ulmPaletteCommand, disposables)
-
-        val detectSyntaxCommand = DetectInstallSyntaxCommand(runtime)
-        CommandProvider.registerCommand(detectSyntaxCommand, disposables)
-
-        // Add Orange to the editor action list. Xed places overflow actions
-        // inside the three-dot menu when they do not fit in the toolbar.
-        orangeCommand = OrangeCommand(
-            childCommands = listOf(ulmPaletteCommand, detectSyntaxCommand)
-        )
+        // Orange is the only registered editor/menu command.
+        orangeCommand = OrangeCommand(runtime)
         CommandProvider.registerCommand(orangeCommand, disposables)
         ToolbarConfiguration.addEditorToolbarCommand(orangeCommand)
     }
