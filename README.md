@@ -1,10 +1,10 @@
 # Universal Language Manager
 
-A Xed-Editor extension that installs and manages TextMate syntax highlighting from language assets bundled inside the extension.
+A Xed-Editor extension that detects the active file type and installs TextMate syntax packs from a GitHub-hosted registry, with bundled fallback assets for offline recovery.
 
 ## Language catalog
 
-ULM uses one metadata file: `app/src/main/assets/languages.json`. Grammar and language-configuration files live directly beside it in the same flat assets directory.
+ULM uses the remote registry at `language-packs/languages.json` on this repository's `feature/detect-install-syntax` branch. Grammar and configuration files are downloaded from `language-packs/<id>/`. The bundled `app/src/main/assets/languages.json` and files remain as an offline fallback.
 
 Current bundled language:
 
@@ -19,7 +19,7 @@ app/src/main/assets/
 └── Astro.config.json
 ```
 
-There are no per-language asset folders and no remote language registry. The runtime reads the catalog, copies the selected grammar/configuration into Xed's private ULM data directory, creates the active TextMate registry, and registers the matching Xed `FileType`.
+The runtime fetches the online catalog over HTTPS, downloads the matching grammar/configuration into a staging directory, validates the grammar scope, then installs it into Xed's private ULM data directory. If an asset download fails, the matching bundled asset is used as a fallback. The active TextMate registry and matching Xed `FileType` are then registered.
 
 ## Add another language
 
@@ -59,9 +59,9 @@ The launcher is installed in Xed's own shared terminal environment; it does not 
 
 ## Active-file syntax detection
 
-The editor toolbar includes **Detect & Install Syntax**. It reads the active file's extension and installs or enables the matching language pack from the extension's bundled catalog. The default shortcut is **Ctrl+Shift+L**.
+The editor toolbar includes **Detect & Install Syntax**. It reads the active file's extension and installs or enables the matching language pack from the online catalog. The default shortcut is **Ctrl+Shift+L**.
 
-The current bundled catalog contains Astro only, so this command currently detects and installs syntax for `.astro` files. Other extensions report that no matching pack is available; this feature does not download arbitrary grammars from the internet.
+The online catalog currently contains Astro only, so `.astro` is the only supported remote pack. Add more packs under `language-packs/<id>/` and register them in `language-packs/languages.json`.
 
 ## Commands
 
@@ -77,6 +77,7 @@ The current bundled catalog contains Astro only, so this command currently detec
 | `ulm enable <language-id>` | Enable its Xed file type |
 | `ulm disable <language-id>` | Disable its Xed file type |
 | `ulm status` | Show manager status |
+| `ulm test-online` | Download and validate the online catalog and Astro grammar |
 | `ulm version` | Show ULM version |
 
 Example:
@@ -86,12 +87,14 @@ ulm search astro
 ulm install astro
 ulm list
 ulm info astro
+ulm test-online
 ```
 
 ## Runtime design
 
 - A small `ulm` shell launcher sends requests through a private filesystem bridge to the loaded extension.
-- `languages.json` is the single source of language metadata.
+- `language-packs/languages.json` is the online source of language metadata; bundled metadata is the fallback.
+- Remote files are fetched from GitHub Raw over HTTPS with connection/read timeouts and a 20 MB per-asset limit.
 - Grammar/configuration assets are copied to `local/home/.local/share/ulm/grammars/<id>/` when installed.
 - A generated runtime registry is written to the ULM private data directory and loaded through Sora TextMate's `GrammarRegistry`.
 - `FileType.kt` registers/unregisters the matching Xed file type from the same metadata.
@@ -100,7 +103,7 @@ ulm info astro
 ## Scope and limitations
 
 - ULM manages syntax highlighting and language file-type registration only. It does not install language servers, compilers, runtimes, debuggers, or formatters.
-- The current catalog includes Astro only; more languages can be added by placing their files in the flat assets directory and adding metadata.
+- The online catalog currently includes Astro only; more languages can be added under `language-packs/<id>/` with a matching registry entry.
 - TextMate's global registry has no public unload API. Restart Xed after removing a grammar to fully clear already-loaded grammar data.
 - Actual editor behavior must be tested in Xed-Editor.
 
