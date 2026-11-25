@@ -11,6 +11,18 @@
       "scopeName": "source.astro",
       "grammar": "astro.tmLanguage.json",
       "languageConfiguration": "Astro.config.json"
+    },
+    {
+      "id": "zig",
+      "name": "Zig",
+      "version": "1.0.0",
+      "extensions": [
+        "zig",
+        "zon"
+      ],
+      "scopeName": "source.zig",
+      "grammar": "zig.tmLanguage.json",
+      "languageConfiguration": "Zig.config.json"
     }
   ]
 }
