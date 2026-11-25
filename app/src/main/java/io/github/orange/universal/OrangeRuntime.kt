@@ -119,7 +119,7 @@ BASE="@@DOLLAR@@{HOME:-/home}/.local/share/orange/bridge"
 REQ="@@DOLLAR@@BASE/requests"
 RES="@@DOLLAR@@BASE/responses"
 mkdir -p "@@DOLLAR@@REQ" "@@DOLLAR@@RES"
-ID="@@DOLLAR@@@@DOLLAR@@-@@DOLLAR@@(date +%s%N)"
+ID="@@DOLLAR@@(date +%s%N)-@@DOLLAR@@@@DOLLAR@@"
 OUT="@@DOLLAR@@RES/@@DOLLAR@@ID"
 TMP="@@DOLLAR@@REQ/.@@DOLLAR@@ID.tmp"
 printf '%s\n' "@@DOLLAR@@@" > "@@DOLLAR@@TMP"
@@ -421,8 +421,12 @@ Language packs are downloaded from the Orange GitHub repository when available.
                 if (movedPrevious && backup.exists() && !backup.renameTo(destination)) {
                     extensionContext.logError("Could not restore previous pack for $id")
                 }
-                runCatching { writeInstalled(previousEntries) }
-                    .onFailure { extensionContext.logError("Could not restore installed-language metadata: ${it.message}") }
+                runCatching {
+                    writeInstalled(previousEntries)
+                    writeGrammarRegistry(previousEntries)
+                    registeredTypes.remove(id)?.let { FileTypeManager.unregister(it) }
+                    previousEntries.firstOrNull { it.id == id && it.enabled }?.let { registerLanguage(it) }
+                }.onFailure { extensionContext.logError("Could not restore previous language registration: ${it.message}") }
                 throw e
             }
         } catch (e: Exception) {
