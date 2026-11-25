@@ -447,7 +447,7 @@ Registry: bundled assets (languages.json)
     }
 
     private fun safeAssetName(value: String): String? {
-        if (value.isBlank() || value == "." || value == ".." || value.contains('/') || value.contains('\\')) return null
+        if (!value.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+-]*")) || value == "." || value == "..") return null
         return value
     }
 
