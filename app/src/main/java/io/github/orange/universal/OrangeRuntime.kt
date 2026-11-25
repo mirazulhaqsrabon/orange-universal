@@ -14,6 +14,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class InstalledLanguage(
     val id: String,
@@ -40,6 +41,7 @@ internal class OrangeRuntime(
     private val metadataFile = File(data, "installed.json")
     private val cliFile = File(privateRoot, "local/bin/orange")
     private val registeredTypes = mutableMapOf<String, FileType>()
+    private val installLocks = ConcurrentHashMap<String, Any>()
     @Volatile private var running = false
     private var worker: Thread? = null
 
@@ -84,7 +86,7 @@ internal class OrangeRuntime(
             while (running && !Thread.currentThread().isInterrupted) {
                 try {
                     requestDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }
-                        ?.sortedBy { it.lastModified() }?.forEach { request ->
+                        ?.sortedBy { it.name }?.forEach { request ->
                             if (running) processRequest(request)
                         }
                     Thread.sleep(120)
@@ -141,15 +143,17 @@ rm -f "@@DOLLAR@@OUT"
     }
 
     private fun processRequest(request: File) {
-        val response = File(responseDir, ".${request.name}.tmp")
+        val published = File(responseDir, request.name)
+        val response = File(responseDir, ".${request.name}.${Thread.currentThread().id}.tmp")
         try {
             val args = request.readLines().filter { it.isNotEmpty() }
             response.writeText(handle(args))
-            val published = File(responseDir, request.name)
-            if (published.exists()) published.delete()
             if (!response.renameTo(published)) throw IllegalStateException("Could not publish command response")
         } catch (e: Exception) {
-            File(responseDir, request.name).writeText("orange: error: ${e.message ?: e.javaClass.simpleName}\n")
+            response.delete()
+            val failure = File(responseDir, ".${request.name}.error.tmp")
+            failure.writeText("orange: error: ${e.message ?: e.javaClass.simpleName}\n")
+            if (!failure.renameTo(published)) extensionContext.logError("Could not publish error response for ${request.name}")
         } finally {
             request.delete()
         }
@@ -200,7 +204,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
 """
 
     private val remoteCatalogUrl =
-        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/orange-menu-download/language-packs/languages.json"
+        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/bf113ea8ff97897b3fa31d159f847d39a1981cf6/language-packs/languages.json"
 
     private fun catalog(): List<JsonObject> = try {
         val root = JsonParser.parseString(downloadText(remoteCatalogUrl)).asJsonObject
@@ -219,8 +223,21 @@ Language packs are downloaded from the Orange GitHub repository when available.
         try {
             val code = connection.responseCode
             if (code !in 200..299) throw IllegalStateException("HTTP $code while downloading catalog")
-            if (connection.contentLengthLong > 2L * 1024L * 1024L) throw IllegalStateException("Remote catalog exceeds 2 MB")
-            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val limit = 2L * 1024L * 1024L
+            if (connection.contentLengthLong > limit) throw IllegalStateException("Remote catalog exceeds 2 MB")
+            return connection.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var total = 0L
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > limit) throw IllegalStateException("Remote catalog exceeds 2 MB")
+                    output.write(buffer, 0, count)
+                }
+                output.toString(Charsets.UTF_8.name())
+            }
         } finally {
             connection.disconnect()
         }
@@ -230,7 +247,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
         if (!languageId.matches(Regex("[a-z0-9][a-z0-9._+-]*")) || safeAssetName(assetName) == null) {
             throw IllegalArgumentException("Invalid remote asset path")
         }
-        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/orange-menu-download/language-packs/" + languageId + "/" + assetName
+        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/bf113ea8ff97897b3fa31d159f847d39a1981cf6/language-packs/" + languageId + "/" + assetName
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 12000
         connection.readTimeout = 30000
@@ -329,6 +346,11 @@ Language packs are downloaded from the Orange GitHub repository when available.
 
     private fun install(idInput: String): String {
         val id = idInput.lowercase(Locale.ROOT)
+        val lock = installLocks.computeIfAbsent(id) { Any() }
+        return synchronized(lock) { installInternal(id) }
+    }
+
+    private fun installInternal(id: String): String {
         if (!id.matches(Regex("[a-z0-9][a-z0-9._+-]*"))) return "Invalid language id.\n"
         val metadata = catalog().firstOrNull { it.stringOrNull("id").equals(id, true) }
             ?: return "Language '$id' is not available in the online GitHub catalog. Try: orange search astro\n"
@@ -345,7 +367,7 @@ Language packs are downloaded from the Orange GitHub repository when available.
         val configName = metadata.stringOrNull("languageConfiguration")?.let {
             safeAssetName(it) ?: throw IllegalArgumentException("Language configuration must be a root-level asset filename")
         }
-        val staging = File(grammarDir, ".$id-staging")
+        val staging = File(grammarDir, ".$id-staging-${Thread.currentThread().id}")
         staging.deleteRecursively()
         if (!staging.mkdirs()) throw IllegalStateException("Could not create language staging directory")
 
@@ -366,25 +388,43 @@ Language packs are downloaded from the Orange GitHub repository when available.
             }
 
             val destination = File(grammarDir, id)
-            destination.deleteRecursively()
-            if (!staging.renameTo(destination)) throw IllegalStateException("Could not install language assets")
+            val backup = File(grammarDir, ".$id-backup")
+            backup.deleteRecursively()
+            val previousEntries = readInstalled()
+            var movedPrevious = false
+            try {
+                if (destination.exists()) {
+                    if (!destination.renameTo(backup)) throw IllegalStateException("Could not preserve the previous language pack")
+                    movedPrevious = true
+                }
+                if (!staging.renameTo(destination)) throw IllegalStateException("Could not install language assets")
 
-            val entry = InstalledLanguage(
-                id = id,
-                title = metadata.string("name"),
-                scope = scope,
-                extensions = extensions,
-                grammar = "orange/grammars/$id/$grammarName",
-                configuration = configurationPath,
-                version = metadata.stringOrNull("version") ?: "1.0.0",
-                enabled = true
-            )
-            val entries = readInstalled().toMutableList()
-            entries.removeAll { it.id == id }
-            entries.add(entry)
-            writeInstalled(entries)
-            registerLanguage(entry)
-            return "Installed ${entry.title} ${entry.version}\n  Scope: ${entry.scope}\n  Files: ${entry.extensions.joinToString { ".$it" }}\n"
+                val entry = InstalledLanguage(
+                    id = id,
+                    title = metadata.string("name"),
+                    scope = scope,
+                    extensions = extensions,
+                    grammar = "orange/grammars/$id/$grammarName",
+                    configuration = configurationPath,
+                    version = metadata.stringOrNull("version") ?: "1.0.0",
+                    enabled = true
+                )
+                val entries = previousEntries.toMutableList()
+                entries.removeAll { it.id == id }
+                entries.add(entry)
+                writeInstalled(entries)
+                registerLanguage(entry)
+                backup.deleteRecursively()
+                return "Installed ${entry.title} ${entry.version}\n  Scope: ${entry.scope}\n  Files: ${entry.extensions.joinToString { ".$it" }}\n"
+            } catch (e: Exception) {
+                if (destination.exists()) destination.deleteRecursively()
+                if (movedPrevious && backup.exists() && !backup.renameTo(destination)) {
+                    extensionContext.logError("Could not restore previous pack for $id")
+                }
+                runCatching { writeInstalled(previousEntries) }
+                    .onFailure { extensionContext.logError("Could not restore installed-language metadata: ${it.message}") }
+                throw e
+            }
         } catch (e: Exception) {
             staging.deleteRecursively()
             throw e
@@ -509,10 +549,7 @@ Registry: GitHub online catalog
         }
         val registryFile = File(data, "registry/languages.json")
         registryFile.parentFile?.mkdirs()
-        val temporary = File(registryFile.parentFile, "languages.json.tmp")
-        temporary.writeText(gson.toJson(definition))
-        if (registryFile.exists() && !registryFile.delete()) throw IllegalStateException("Could not replace grammar registry")
-        if (!temporary.renameTo(registryFile)) throw IllegalStateException("Could not publish grammar registry")
+        replaceFileAtomically(registryFile, gson.toJson(definition), "languages.json")
         GrammarRegistry.getInstance().loadGrammars("orange/registry/languages.json")
     }
 
@@ -531,10 +568,33 @@ Registry: GitHub online catalog
 
     private fun writeInstalled(entries: List<InstalledLanguage>) {
         metadataFile.parentFile?.mkdirs()
-        val temporary = File(metadataFile.parentFile, "installed.json.tmp")
-        temporary.writeText(gson.toJson(entries))
-        if (metadataFile.exists() && !metadataFile.delete()) throw IllegalStateException("Could not replace installed language list")
-        if (!temporary.renameTo(metadataFile)) throw IllegalStateException("Could not save installed language list")
+        replaceFileAtomically(metadataFile, gson.toJson(entries), "installed.json")
+    }
+
+    private fun replaceFileAtomically(target: File, content: String, temporaryName: String) {
+        val parent = target.parentFile ?: throw IllegalStateException("Missing parent directory for ${target.name}")
+        if (!parent.exists() && !parent.mkdirs()) throw IllegalStateException("Could not create ${parent.path}")
+        val temporary = File(parent, ".$temporaryName.${Thread.currentThread().id}.tmp")
+        val backup = File(parent, ".$temporaryName.backup")
+        temporary.writeText(content)
+        backup.delete()
+        var backedUp = false
+        try {
+            if (target.exists()) {
+                if (!target.renameTo(backup)) throw IllegalStateException("Could not preserve ${target.name}")
+                backedUp = true
+            }
+            if (!temporary.renameTo(target)) throw IllegalStateException("Could not publish ${target.name}")
+            backup.delete()
+        } catch (e: Exception) {
+            target.delete()
+            if (backedUp && backup.exists() && !backup.renameTo(target)) {
+                extensionContext.logError("Could not restore ${target.name} after failed write")
+            }
+            throw e
+        } finally {
+            temporary.delete()
+        }
     }
 
     private fun JsonObject.string(key: String): String =
