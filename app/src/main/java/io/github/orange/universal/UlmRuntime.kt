@@ -79,7 +79,7 @@ internal class UlmRuntime(
             isDaemon = true
             start()
         }
-        extensionContext.logInfo("Universal Language Manager is ready. Run 'ulm help' in Xed Ubuntu terminal.")
+        extensionContext.logInfo("Orange is ready. Syntax packs are downloaded from the online GitHub catalog.")
     }
 
     fun stop() {
@@ -150,7 +150,7 @@ rm -f "@@DOLLAR@@OUT"
             "disable" -> if (args.size != 2) "Usage: ulm disable <language-id>\n" else setEnabled(args[1], false)
             "status" -> status()
             "test-online", "online" -> testOnlineDownload()
-            "version", "--version", "-v" -> "Universal Language Manager 1.0.0\n"
+            "version", "--version", "-v" -> "Orange 1.0.0\n"
             else -> "Unknown command: ${args[0]}\nRun 'ulm help' for usage.\n"
         }
     }
@@ -181,7 +181,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
 """
 
     private val remoteCatalogUrl =
-        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/detect-install-syntax/language-packs/languages.json"
+        "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/orange-menu-download/language-packs/languages.json"
 
     private fun catalog(): List<JsonObject> = try {
         val root = JsonParser.parseString(downloadText(remoteCatalogUrl)).asJsonObject
@@ -211,7 +211,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         if (!languageId.matches(Regex("[a-z0-9][a-z0-9._+-]*")) || safeAssetName(assetName) == null) {
             throw IllegalArgumentException("Invalid remote asset path")
         }
-        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/detect-install-syntax/language-packs/" + languageId + "/" + assetName
+        val url = "https://raw.githubusercontent.com/mirazulhaqsrabon/orange-universal/feature/orange-menu-download/language-packs/" + languageId + "/" + assetName
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 12000
         connection.readTimeout = 30000
@@ -295,7 +295,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         }
     }
 
-    fun installForExtension(extensionInput: String): String {
+    fun downloadForExtension(extensionInput: String): String {
         val extension = extensionInput.removePrefix(".").lowercase(Locale.ROOT)
         if (extension.isBlank()) return "The active file has no extension.\n"
 
@@ -306,7 +306,7 @@ Language packs are downloaded from the ULM GitHub repository when available.
         val id = metadata.string("id")
         val installed = readInstalled().firstOrNull { it.id.equals(id, true) }
         if (installed?.enabled == true) return "${installed.title} syntax is already enabled.\n"
-        if (installed != null) return setEnabled(id, true)
+        if (installed != null && !installed.enabled) return setEnabled(id, true)
         return install(id)
     }
 
@@ -440,7 +440,7 @@ Status: $state
 
     private fun status(): String {
         val entries = readInstalled()
-        return """Universal Language Manager 1.0.0
+        return """Orange 1.0.0
 Available languages: ${catalog().size}
 Installed languages: ${entries.size}
 Enabled languages: ${entries.count { it.enabled }}
